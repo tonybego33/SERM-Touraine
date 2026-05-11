@@ -84,9 +84,9 @@
 
     @keyframes sermBlink { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
     @keyframes sermShine { 0% { left: -50%; } 55%, 100% { left: 110%; } }
-    @keyframes sermPulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: .75; } }
   </style>
 </head>
+
 <body>
 <div id="root"></div>
 
@@ -95,8 +95,6 @@ const { useEffect, useMemo, useRef, useState } = React;
 
 /* ============================================================
    DONNÉES — TOURAINE
-   À remplacer/compléter avec ton fichier final si besoin.
-   La structure est volontairement identique à SERM HDF.
    ============================================================ */
 const GARES = [
   { nom: "Tours", uic: 87571000, cat_pro: "1- Pôle métropolitain", cat_sgp: "PEM de centralité", ligne_flux: "T00", axe: "Étoile ferroviaire de Tours", secteur: "Cœur métropolitain", profile: "bv_ouvert_pers", config: "biface", quais: 5 },
@@ -134,31 +132,21 @@ const GARES = [
   { nom: "Maillé", uic: 87571802, cat_pro: "4- Halte périurbaine", cat_sgp: "Halte", ligne_flux: "T07", axe: "Tours–Poitiers", secteur: "Sud Touraine", profile: "halte_simple", config: "unilaterale", quais: 1 }
 ];
 
-const TYPOLOGIES = [
-  "Halte simple (1 voie, 1 quai)",
-  "Halte double (2 voies, 2 quais latéraux)",
-  "Gare urbaine avec BV",
-  "PEM de centralité",
-  "Hub d'interconnexion",
-  "Gare terminus / antenne"
-];
-
 const getTypologie = (gare) => {
-  if (!gare) return TYPOLOGIES[1];
+  if (!gare) return "Halte double";
   if (gare.cat_sgp?.includes("Hub")) return "Hub d'interconnexion";
   if (gare.cat_sgp === "PEM de centralité") return "PEM de centralité";
   if (gare.config === "terminus") return "Gare terminus / antenne";
-  if (gare.profile?.includes("bv")) return "Gare urbaine avec BV";
-  if (gare.config === "unilaterale" || gare.quais === 1) return "Halte simple (1 voie, 1 quai)";
-  return "Halte double (2 voies, 2 quais latéraux)";
+  if (gare.profile?.includes("bv")) return "Gare avec BV";
+  if (gare.config === "unilaterale" || gare.quais === 1) return "Halte simple";
+  return "Halte double";
 };
 
 /* ============================================================
-   QUESTIONS — TOURAINE
-   Structure compatible avec l'UI HDF : section, critères, skip logic.
+   QUESTIONS — aucune section bloquée, aucun message Flux
    ============================================================ */
 const SECTIONS = [
-  { id: "bureau", n: 0, title: "À préparer au bureau", short: "Bureau", icon: "✎", subtitle: "Pré-rempli depuis SIG / données réseau — verrouillé pour l'instant", bureau: true, fluxLocked: true, criteria: [
+  { id: "bureau", n: 0, title: "À préparer au bureau", short: "Bureau", icon: "✎", subtitle: "Données amont à renseigner ou vérifier avant / après visite", bureau: true, criteria: [
     { id: "desk_bassin", label: "Population + emplois dans le bassin de proximité", type: "rating", scale: 4, labels: ["Très faible", "Faible", "Moyenne", "Forte"], tag: "SIG" },
     { id: "desk_centralite", label: "Centralité / équipement structurant à moins de 800 m", type: "presence", tag: "SIG" },
     { id: "desk_tourisme", label: "Attracteur touristique majeur à proximité", type: "presence", tag: "SIG" },
@@ -185,7 +173,7 @@ const SECTIONS = [
     { id: "carac_lisibilite", label: "Lisibilité générale de l'entrée de gare", type: "rating", scale: 4, labels: ["Très faible", "Faible", "Moyenne", "Bonne"] }
   ]},
 
-  { id: "parking", n: 2, title: "Parking VP & dépose", short: "Parking", icon: "P", subtitle: "Stationnement automobile, dépose et rabattement", fluxPrefilled: true,
+  { id: "parking", n: 2, title: "Parking VP & dépose", short: "Parking", icon: "P", subtitle: "Stationnement automobile, dépose et rabattement",
     skipIf: (g, d) => {
       const v = getVal(d?.carac_parking_types);
       return Array.isArray(v) && v.length === 1 && v[0] === "Pas de parking gare";
@@ -201,7 +189,7 @@ const SECTIONS = [
     { id: "parking_etat", label: "État général du parking", type: "rating", scale: 4, labels: ["N/A", "Mauvais", "Moyen", "Bon"] }
   ]},
 
-  { id: "parvis", n: 3, title: "Parvis & abords piétons", short: "Parvis", icon: "⌂", subtitle: "Espace d'arrivée, cheminements et lisibilité", fluxPrefilled: true, criteria: [
+  { id: "parvis", n: 3, title: "Parvis & abords piétons", short: "Parvis", icon: "⌂", subtitle: "Espace d'arrivée, cheminements et lisibilité", criteria: [
     { id: "parvis_qualite", label: "Qualité globale du parvis", type: "rating", scale: 4, labels: ["Absent", "Sommaire", "Standard", "Qualitatif"] },
     { id: "parvis_continuite", label: "Continuité piétonne depuis la ville", type: "rating", scale: 4, labels: ["Absente", "Discontinue", "Moyenne", "Bonne"] },
     { id: "parvis_traversees", label: "Traversées piétonnes sécurisées aux abords", type: "presence" },
@@ -216,7 +204,7 @@ const SECTIONS = [
     { id: "parvis_conflits", label: "Conflits d'usage visibles (VP, piétons, vélos, bus)", type: "presence" }
   ]},
 
-  { id: "velos", n: 4, title: "Stationnement vélos", short: "Vélos", icon: "⊙", subtitle: "Arceaux, abris, sécurisation et accès cyclable", fluxPrefilled: true,
+  { id: "velos", n: 4, title: "Stationnement vélos", short: "Vélos", icon: "⊙", subtitle: "Arceaux, abris, sécurisation et accès cyclable",
     skipIf: (g, d) => {
       const v = getVal(d?.carac_velos_types);
       return Array.isArray(v) && v.length === 1 && v[0] === "Absent";
@@ -319,59 +307,9 @@ const SECTIONS = [
 /* ============================================================
    STORE LOCAL
    ============================================================ */
-const KEY = "serm-touraine-v1:visites";
+const KEY = "serm-touraine-v2:visites";
 const loadAll = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 const saveAll = (all) => { try { localStorage.setItem(KEY, JSON.stringify(all)); } catch {} };
-
-/* ============================================================
-   HELPERS
-   ============================================================ */
-const fillableCriteria = (s) => (s.criteria || []).filter(c => c.type !== "subhead");
-const getVal = (raw) => {
-  if (raw == null) return undefined;
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "object") {
-    if ("presence" in raw) return raw;
-    if ("val" in raw) return raw.val;
-    return raw;
-  }
-  return raw;
-};
-const getNote = (raw) => raw && typeof raw === "object" && !Array.isArray(raw) ? (raw.note || "") : "";
-const getPhotos = (raw) => raw && typeof raw === "object" && !Array.isArray(raw) ? (raw.photos || []) : [];
-const isFilled = (c, raw) => {
-  const v = getVal(raw);
-  if (v === undefined || v === null || v === "") return false;
-  if (Array.isArray(v)) return v.length > 0;
-  if (typeof v === "object" && v !== null) {
-    if ("presence" in v) return v.presence === "yes" || v.presence === "no";
-    if ("val" in v) return v.val !== undefined && v.val !== null && v.val !== "";
-  }
-  return true;
-};
-const sectionStats = (s, data) => {
-  const items = fillableCriteria(s);
-  const filled = items.filter(c => isFilled(c, data?.[c.id])).length;
-  return { filled, total: items.length };
-};
-const visiteStats = (gare, data) => {
-  let f = 0, t = 0;
-  SECTIONS.forEach(s => {
-    if (s.skipIf && s.skipIf(gare, data)) return;
-    const st = sectionStats(s, data);
-    f += st.filled; t += st.total;
-  });
-  return { filled: f, total: t, pct: t === 0 ? 0 : Math.round(f / t * 100) };
-};
-const fmtAgo = (ts) => {
-  if (!ts) return "jamais";
-  const m = Math.floor((Date.now() - ts) / 60000);
-  if (m < 1) return "à l'instant";
-  if (m < 60) return `il y a ${m} min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `il y a ${h}h`;
-  return `il y a ${Math.floor(h / 24)}j`;
-};
 
 function dataUrlFromFile(file) {
   return new Promise((resolve, reject) => {
@@ -383,72 +321,184 @@ function dataUrlFromFile(file) {
 }
 
 /* ============================================================
+   HELPERS
+   ============================================================ */
+const fillableCriteria = (s) => (s.criteria || []).filter(c => c.type !== "subhead");
+
+const getVal = (raw) => {
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "object") {
+    if ("presence" in raw) return raw;
+    if ("val" in raw) return raw.val;
+    return raw;
+  }
+  return raw;
+};
+
+const getNote = (raw) =>
+  raw && typeof raw === "object" && !Array.isArray(raw) ? (raw.note || "") : "";
+
+const getPhotos = (raw) =>
+  raw && typeof raw === "object" && !Array.isArray(raw) ? (raw.photos || []) : [];
+
+const isFilled = (c, raw) => {
+  const v = getVal(raw);
+  if (v === undefined || v === null || v === "") return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === "object" && v !== null) {
+    if ("presence" in v) return v.presence === "yes" || v.presence === "no";
+    if ("val" in v) return v.val !== undefined && v.val !== null && v.val !== "";
+  }
+  return true;
+};
+
+const sectionStats = (s, data) => {
+  const items = fillableCriteria(s);
+  const filled = items.filter(c => isFilled(c, data?.[c.id])).length;
+  return { filled, total: items.length };
+};
+
+const visiteStats = (gare, data) => {
+  let f = 0, t = 0;
+  SECTIONS.forEach(s => {
+    if (s.skipIf && s.skipIf(gare, data)) return;
+    const st = sectionStats(s, data);
+    f += st.filled;
+    t += st.total;
+  });
+  return { filled: f, total: t, pct: t === 0 ? 0 : Math.round(f / t * 100) };
+};
+
+const fmtAgo = (ts) => {
+  if (!ts) return "jamais";
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `il y a ${h}h`;
+  return `il y a ${Math.floor(h / 24)}j`;
+};
+
+/* ============================================================
    UI ATOMS
    ============================================================ */
 function ProgressRing({ pct, size = 48, stroke = 4, color = "var(--red)" }) {
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;
-  return <div style={{ width: size, height: size, position: "relative", flexShrink: 0 }}>
-    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)}
-        style={{ transition: "stroke-dashoffset .4s ease" }}/>
-    </svg>
-    <div className="tabular" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{pct}%</div>
-  </div>;
+  return (
+    <div style={{ width: size, height: size, position: "relative", flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke}/>
+        <circle
+          cx={size/2}
+          cy={size/2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - pct / 100)}
+          style={{ transition: "stroke-dashoffset .4s ease" }}
+        />
+      </svg>
+      <div
+        className="tabular"
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 10,
+          fontWeight: 800
+        }}
+      >
+        {pct}%
+      </div>
+    </div>
+  );
 }
 
 function Toast({ toast }) {
   if (!toast) return null;
-  return <div style={{
-    position: "fixed", bottom: 30, left: "50%", transform: "translateX(-50%)",
-    background: toast.type === "error" ? "var(--red)" : toast.type === "success" ? "var(--green)" : "var(--ink)",
-    color: "var(--paper-light)", padding: "10px 18px", fontSize: 13, fontWeight: 600,
-    borderRadius: 2, boxShadow: "var(--shadow-lg)", zIndex: 1000, maxWidth: "80vw"
-  }}>{toast.msg}</div>;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 30,
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: toast.type === "error" ? "var(--red)" : toast.type === "success" ? "var(--green)" : "var(--ink)",
+        color: "var(--paper-light)",
+        padding: "10px 18px",
+        fontSize: 13,
+        fontWeight: 600,
+        borderRadius: 2,
+        boxShadow: "var(--shadow-lg)",
+        zIndex: 1000,
+        maxWidth: "80vw"
+      }}
+    >
+      {toast.msg}
+    </div>
+  );
 }
 
 function Kicker({ children, color = "var(--red)" }) {
-  return <div className="kicker" style={{ color, display: "flex", alignItems: "center", gap: 10 }}>
-    <span style={{ width: 18, height: 1.5, background: color }} />{children}
-  </div>;
+  return (
+    <div className="kicker" style={{ color, display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ width: 18, height: 1.5, background: color }} />
+      {children}
+    </div>
+  );
 }
 
 /* ============================================================
-   SVG PLAN — reproduction de l'esprit HDF
+   SVG PLAN — esprit SERM HDF
    ============================================================ */
-function buildStationProgressSVG(progress, activeZone, gare) {
+function buildStationProgressSVG(progress, activeZone) {
   const ISO_X = 0.866, ISO_Y = 0.5;
   const iso = (x, y, h = 0) => ({ x: (x - y) * ISO_X, y: (x + y) * ISO_Y - h });
   const stateFor = (pct) => pct === 0 ? "empty" : pct >= 1 ? "done" : "partial";
 
   const DONE = { top: "#4A8F66", side: "#2D6B43", sideR: "#1F4F31", stroke: "#0F3B22", text: "#FAF8F3" };
   const PAL = {
-    quais: { top: "#F5F2EB", side: "#D9D3C4" }, velos: { top: "#E5E7EB", side: "#9CA3AF" },
-    tc: { top: "#E5E7EB", side: "#9CA3AF" }, parking: { top: "#EDE8DD", side: "#D9D3C4" },
-    parvis: { top: "#EDE6D8", side: "#D4C9B0" }, franch: { top: "#9CA3AF", side: "#6B7280" }
+    quais: { top: "#F5F2EB", side: "#D9D3C4" },
+    velos: { top: "#E5E7EB", side: "#9CA3AF" },
+    tc: { top: "#E5E7EB", side: "#9CA3AF" },
+    parking: { top: "#EDE8DD", side: "#D9D3C4" },
+    parvis: { top: "#EDE6D8", side: "#D4C9B0" },
+    franch: { top: "#9CA3AF", side: "#6B7280" }
   };
 
   const renderBlock = (b, palette, label, state, isActive) => {
     const A=iso(b.x,b.y,b.h), B=iso(b.x+b.w,b.y,b.h), C=iso(b.x+b.w,b.y+b.d,b.h), D=iso(b.x,b.y+b.d,b.h);
     const E=iso(b.x,b.y+b.d,0), F=iso(b.x+b.w,b.y+b.d,0), G=iso(b.x+b.w,b.y,0);
+
     if (isActive) return `<g>
       <polygon points="${B.x},${B.y} ${G.x},${G.y} ${F.x},${F.y} ${C.x},${C.y}" fill="#9E0B24" stroke="#1A1A1A" stroke-width="0.15"><animate attributeName="fill" values="#9E0B24;#E8475B;#9E0B24" dur="1.4s" repeatCount="indefinite"/></polygon>
       <polygon points="${C.x},${C.y} ${F.x},${F.y} ${E.x},${E.y} ${D.x},${D.y}" fill="#9E0B24" stroke="#1A1A1A" stroke-width="0.15" opacity="0.85"><animate attributeName="fill" values="#9E0B24;#E8475B;#9E0B24" dur="1.4s" repeatCount="indefinite"/></polygon>
       <polygon points="${A.x},${A.y} ${B.x},${B.y} ${C.x},${C.y} ${D.x},${D.y}" fill="#C8102E" stroke="#1A1A1A" stroke-width="0.15"><animate attributeName="fill" values="#C8102E;#E8475B;#C8102E" dur="1.4s" repeatCount="indefinite"/></polygon>
       ${label ? `<text x="${(A.x+C.x)/2}" y="${(A.y+C.y)/2+0.7}" font-size="2" font-weight="700" fill="#FAF8F3" text-anchor="middle">${label}</text>` : ""}
     </g>`;
+
     if (state === "empty") {
       const g0=iso(b.x,b.y,0), g1=iso(b.x+b.w,b.y,0), g2=iso(b.x+b.w,b.y+b.d,0), g3=iso(b.x,b.y+b.d,0);
-      return `<g opacity="0.48"><polygon points="${g0.x},${g0.y} ${g1.x},${g1.y} ${g2.x},${g2.y} ${g3.x},${g3.y}" fill="none" stroke="#8B8680" stroke-width="0.2" stroke-dasharray="0.8,0.6"/>${label ? `<text x="${(g0.x+g2.x)/2}" y="${(g0.y+g2.y)/2+0.6}" font-size="1.6" fill="#8B8680" text-anchor="middle" font-style="italic">${label}</text>` : ""}</g>`;
+      return `<g opacity="0.48">
+        <polygon points="${g0.x},${g0.y} ${g1.x},${g1.y} ${g2.x},${g2.y} ${g3.x},${g3.y}" fill="none" stroke="#8B8680" stroke-width="0.2" stroke-dasharray="0.8,0.6"/>
+        ${label ? `<text x="${(g0.x+g2.x)/2}" y="${(g0.y+g2.y)/2+0.6}" font-size="1.6" fill="#8B8680" text-anchor="middle" font-style="italic">${label}</text>` : ""}
+      </g>`;
     }
+
     if (state === "done") return `<g>
       <polygon points="${B.x},${B.y} ${G.x},${G.y} ${F.x},${F.y} ${C.x},${C.y}" fill="${DONE.sideR}" stroke="${DONE.stroke}" stroke-width="0.15"/>
       <polygon points="${C.x},${C.y} ${F.x},${F.y} ${E.x},${E.y} ${D.x},${D.y}" fill="${DONE.side}" stroke="${DONE.stroke}" stroke-width="0.15"/>
       <polygon points="${A.x},${A.y} ${B.x},${B.y} ${C.x},${C.y} ${D.x},${D.y}" fill="${DONE.top}" stroke="${DONE.stroke}" stroke-width="0.15"/>
       ${label ? `<text x="${(A.x+C.x)/2}" y="${(A.y+C.y)/2+0.7}" font-size="2" font-weight="700" fill="${DONE.text}" text-anchor="middle">${label}</text>` : ""}
     </g>`;
+
     return `<g opacity="0.55">
       <polygon points="${B.x},${B.y} ${G.x},${G.y} ${F.x},${F.y} ${C.x},${C.y}" fill="${palette.side}" stroke="#1A1A1A" stroke-width="0.12"/>
       <polygon points="${C.x},${C.y} ${F.x},${F.y} ${E.x},${E.y} ${D.x},${D.y}" fill="${palette.side}" stroke="#1A1A1A" stroke-width="0.12" opacity="0.85"/>
@@ -459,12 +509,13 @@ function buildStationProgressSVG(progress, activeZone, gare) {
 
   const renderBV = (b, state, isActive) => {
     const wallH=b.h, roofExtra=1.4, over=0.5;
-    const A=iso(b.x,b.y,wallH), B=iso(b.x+b.w,b.y,wallH), C=iso(b.x+b.w,b.y+b.d,wallH), D=iso(b.x,b.y+b.d,wallH);
+    const B=iso(b.x+b.w,b.y,wallH), C=iso(b.x+b.w,b.y+b.d,wallH), D=iso(b.x,b.y+b.d,wallH);
     const E=iso(b.x,b.y+b.d,0), F=iso(b.x+b.w,b.y+b.d,0), G=iso(b.x+b.w,b.y,0);
     const ridgeY=b.y+b.d/2, ridgeH=wallH+roofExtra;
     const r1=iso(b.x-over,b.y-over,wallH), r2=iso(b.x+b.w+over,b.y-over,wallH), r3=iso(b.x+b.w+over,b.y+b.d+over,wallH), r4=iso(b.x-over,b.y+b.d+over,wallH);
     const ridgeL=iso(b.x-over,ridgeY,ridgeH), ridgeR=iso(b.x+b.w+over,ridgeY,ridgeH);
     const pgNE=iso(b.x+b.w,b.y,wallH), pgSE=iso(b.x+b.w,b.y+b.d,wallH), pgME=iso(b.x+b.w,ridgeY,ridgeH);
+
     if (isActive) return `<g>
       <polygon points="${B.x},${B.y} ${G.x},${G.y} ${F.x},${F.y} ${C.x},${C.y}" fill="#9E0B24" stroke="#1A1A1A" stroke-width="0.15"><animate attributeName="fill" values="#9E0B24;#E8475B;#9E0B24" dur="1.4s" repeatCount="indefinite"/></polygon>
       <polygon points="${C.x},${C.y} ${F.x},${F.y} ${E.x},${E.y} ${D.x},${D.y}" fill="#9E0B24" stroke="#1A1A1A" stroke-width="0.15" opacity="0.85"/>
@@ -473,10 +524,15 @@ function buildStationProgressSVG(progress, activeZone, gare) {
       <polygon points="${ridgeL.x},${ridgeL.y} ${ridgeR.x},${ridgeR.y} ${r3.x},${r3.y} ${r4.x},${r4.y}" fill="#9E0B24" stroke="#1A1A1A" stroke-width="0.15"><animate attributeName="fill" values="#9E0B24;#E8475B;#9E0B24" dur="1.4s" repeatCount="indefinite"/></polygon>
       <text x="${pgNE.x+1}" y="${pgME.y+1.5}" font-size="1.6" font-weight="700" fill="#FAF8F3">BV</text>
     </g>`;
+
     if (state === "empty") {
       const g0=iso(b.x,b.y,0), g1=iso(b.x+b.w,b.y,0), g2=iso(b.x+b.w,b.y+b.d,0), g3=iso(b.x,b.y+b.d,0);
-      return `<g opacity="0.48"><polygon points="${g0.x},${g0.y} ${g1.x},${g1.y} ${g2.x},${g2.y} ${g3.x},${g3.y}" fill="none" stroke="#8B8680" stroke-width="0.2" stroke-dasharray="0.8,0.6"/><text x="${(g0.x+g2.x)/2}" y="${(g0.y+g2.y)/2+0.6}" font-size="1.6" fill="#8B8680" text-anchor="middle" font-style="italic">BV</text></g>`;
+      return `<g opacity="0.48">
+        <polygon points="${g0.x},${g0.y} ${g1.x},${g1.y} ${g2.x},${g2.y} ${g3.x},${g3.y}" fill="none" stroke="#8B8680" stroke-width="0.2" stroke-dasharray="0.8,0.6"/>
+        <text x="${(g0.x+g2.x)/2}" y="${(g0.y+g2.y)/2+0.6}" font-size="1.6" fill="#8B8680" text-anchor="middle" font-style="italic">BV</text>
+      </g>`;
     }
+
     const green = state === "done";
     return `<g opacity="${green ? 1 : .55}">
       <polygon points="${B.x},${B.y} ${G.x},${G.y} ${F.x},${F.y} ${C.x},${C.y}" fill="${green ? DONE.sideR : '#C8C3B5'}" stroke="#1A1A1A" stroke-width="0.12"/>
@@ -507,17 +563,27 @@ function buildStationProgressSVG(progress, activeZone, gare) {
   const Q1={x:5,y:1,w:85,d:2.5,h:1}, Q2={x:5,y:6.5,w:85,d:2.5,h:1}, BV={x:38,y:13,w:18,d:6,h:5.5}, VELOS={x:17,y:13,w:7,d:5,h:1.8}, TC={x:26,y:13,w:9,d:5,h:2.2}, PARK={x:60,y:13,w:26,d:7,h:.6}, PARV={x:14,y:21,w:72,d:3,h:.3}, FR={x:45,y:1,w:4,d:8,h:2};
   const corners=[iso(0,0),iso(95,0),iso(0,32),iso(95,32),iso(45,1,4)];
   const minX=Math.min(...corners.map(p=>p.x))-6, maxX=Math.max(...corners.map(p=>p.x))+6, minY=Math.min(...corners.map(p=>p.y))-10, maxY=Math.max(...corners.map(p=>p.y))+8;
+
   let svg = `<svg viewBox="${minX} ${minY} ${maxX-minX} ${maxY-minY}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">`;
+
   const g1=iso(0,0), g2=iso(95,0), g3=iso(95,32), g4=iso(0,32);
   svg += `<polygon points="${g1.x},${g1.y} ${g2.x},${g2.y} ${g3.x},${g3.y} ${g4.x},${g4.y}" fill="#F5F2EB" stroke="#EDE8DD" stroke-width="0.3"/>`;
+
   const r1=iso(0,26), r2=iso(95,26), r3=iso(95,32), r4=iso(0,32);
   svg += `<polygon points="${r1.x},${r1.y} ${r2.x},${r2.y} ${r3.x},${r3.y} ${r4.x},${r4.y}" fill="#5A5A5A" stroke="#1A1A1A" stroke-width="0.15"/>`;
-  for (let i=0;i<9;i++){ const cx=5+i*11, m1=iso(cx,29,.1), m2=iso(cx+5,29,.1); svg += `<line x1="${m1.x}" y1="${m1.y}" x2="${m2.x}" y2="${m2.y}" stroke="#F5F2EB" stroke-width="0.5"/>`; }
+
+  for (let i=0;i<9;i++) {
+    const cx=5+i*11, m1=iso(cx,29,.1), m2=iso(cx+5,29,.1);
+    svg += `<line x1="${m1.x}" y1="${m1.y}" x2="${m2.x}" y2="${m2.y}" stroke="#F5F2EB" stroke-width="0.5"/>`;
+  }
+
   [4,5].forEach(vy => {
-    const p1=iso(0,vy-1), p2=iso(95,vy-1), p3=iso(95,vy+1), p4=iso(0,vy+1), aa=iso(0,vy-.6,.1), bb=iso(95,vy-.6,.1), cc=iso(0,vy+.6,.1), dd=iso(95,vy+.6,.1);
+    const p1=iso(0,vy-1), p2=iso(95,vy-1), p3=iso(95,vy+1), p4=iso(0,vy+1);
+    const aa=iso(0,vy-.6,.1), bb=iso(95,vy-.6,.1), cc=iso(0,vy+.6,.1), dd=iso(95,vy+.6,.1);
     svg += `<polygon points="${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}" fill="#D9D3C4" opacity="0.5"/>`;
     svg += `<line x1="${aa.x}" y1="${aa.y}" x2="${bb.x}" y2="${bb.y}" stroke="#1A1A1A" stroke-width="0.4"/><line x1="${cc.x}" y1="${cc.y}" x2="${dd.x}" y2="${dd.y}" stroke="#1A1A1A" stroke-width="0.4"/>`;
   });
+
   svg += renderBlock(Q1, PAL.quais, null, stateFor(progress.quais), activeZone === "quais");
   svg += renderBlock(Q2, PAL.quais, null, stateFor(progress.quais), activeZone === "quais");
   svg += renderTrain();
@@ -532,9 +598,18 @@ function buildStationProgressSVG(progress, activeZone, gare) {
   const logoBg = isBureauActive ? "#C8102E" : isBureauDone ? "#4A8F66" : "#FAF8F3";
   const logoFg = isBureauActive || isBureauDone ? "#FAF8F3" : "#1A1A1A";
   const logoStroke = isBureauActive ? "#9E0B24" : isBureauDone ? "#1F4F31" : "#1A1A1A";
+
   svg += `<g transform="translate(${logoX} ${logoY})">`;
   if (isBureauActive) svg += `<circle cx="0" cy="0" r="4" fill="#C8102E" opacity="0.3"><animate attributeName="r" values="4;7;4" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.4;0;0.4" dur="1.6s" repeatCount="indefinite"/></circle>`;
-  svg += `<circle cx="0" cy="0" r="3.4" fill="${logoBg}" stroke="${logoStroke}" stroke-width="0.25"/><rect x="-2.2" y="0.4" width="4.4" height="0.4" fill="${logoFg}" rx="0.1"/><rect x="-2" y="0.8" width="0.3" height="1.3" fill="${logoFg}"/><rect x="1.7" y="0.8" width="0.3" height="1.3" fill="${logoFg}"/><rect x="-1.3" y="-0.2" width="1.7" height="0.6" fill="${logoFg}" rx="0.05"/><line x1="1" y1="0.4" x2="1" y2="-0.6" stroke="${logoFg}" stroke-width="0.18"/><line x1="1" y1="-0.6" x2="1.7" y2="-1.1" stroke="${logoFg}" stroke-width="0.18"/><polygon points="1.7,-1.1 2.1,-1.4 1.95,-0.85 1.55,-0.95" fill="${logoFg}"/></g>`;
+  svg += `<circle cx="0" cy="0" r="3.4" fill="${logoBg}" stroke="${logoStroke}" stroke-width="0.25"/>
+    <rect x="-2.2" y="0.4" width="4.4" height="0.4" fill="${logoFg}" rx="0.1"/>
+    <rect x="-2" y="0.8" width="0.3" height="1.3" fill="${logoFg}"/>
+    <rect x="1.7" y="0.8" width="0.3" height="1.3" fill="${logoFg}"/>
+    <rect x="-1.3" y="-0.2" width="1.7" height="0.6" fill="${logoFg}" rx="0.05"/>
+    <line x1="1" y1="0.4" x2="1" y2="-0.6" stroke="${logoFg}" stroke-width="0.18"/>
+    <line x1="1" y1="-0.6" x2="1.7" y2="-1.1" stroke="${logoFg}" stroke-width="0.18"/>
+    <polygon points="1.7,-1.1 2.1,-1.4 1.95,-0.85 1.55,-0.95" fill="${logoFg}"/>
+  </g>`;
   svg += `<text x="${logoX}" y="${logoY+6.5}" font-size="1.4" fill="${isBureauActive ? '#C8102E' : isBureauDone ? '#1F4F31' : '#8B8680'}" text-anchor="middle" font-weight="700" letter-spacing="0.05">BUREAU</text>`;
   svg += `</svg>`;
   return svg;
@@ -543,23 +618,53 @@ function buildStationProgressSVG(progress, activeZone, gare) {
 function StationProgress({ gare, visite, activeId }) {
   const progress = {};
   SECTIONS.forEach(s => {
-    if (s.skipIf && s.skipIf(gare, visite.data)) progress[s.id] = 1;
-    else { const st = sectionStats(s, visite.data); progress[s.id] = st.total === 0 ? 0 : st.filled / st.total; }
+    if (s.skipIf && s.skipIf(gare, visite.data)) {
+      progress[s.id] = 1;
+    } else {
+      const st = sectionStats(s, visite.data);
+      progress[s.id] = st.total === 0 ? 0 : st.filled / st.total;
+    }
   });
-  const svgHtml = buildStationProgressSVG(progress, activeId, gare);
-  return <div dangerouslySetInnerHTML={{ __html: svgHtml }} style={{ width: "100%" }} />;
+  return <div dangerouslySetInnerHTML={{ __html: buildStationProgressSVG(progress, activeId) }} style={{ width: "100%" }} />;
 }
 
 /* ============================================================
    HOME
    ============================================================ */
+function HomeStat({ value, label, sub, color, pulse, pale }) {
+  return (
+    <div
+      style={{
+        background: pale ? "var(--paper)" : "var(--white)",
+        border: pale ? "1px dashed var(--border)" : "1px solid var(--border)",
+        borderTop: `3px solid ${color}`,
+        borderRadius: 2,
+        padding: "12px 12px 10px"
+      }}
+    >
+      <div className="tabular" style={{ fontWeight: 800, fontSize: 32, lineHeight: 1, letterSpacing: "-.04em", color: pale ? "var(--taupe)" : "var(--ink)" }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 9.5, letterSpacing: ".14em", textTransform: "uppercase", color, fontWeight: 800, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
+        {pulse && <span style={{ width:6,height:6,borderRadius:"50%",background:color,animation:"sermBlink 1.4s ease-in-out infinite" }}/>}
+        {label}
+      </div>
+      <div style={{ fontSize: 10, color: "var(--taupe)", marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+}
+
 function HomeScreen({ all, auteur, onChangeAuteur, onPick, onOpen, onExport }) {
   const visites = Object.values(all).sort((a,b)=>b.updated-a.updated);
   const totalGares = GARES.length;
   const visited = visites.length;
-  const fullyDone = visites.filter(v => { const g = GARES.find(x=>x.nom===v.gare); return g && visiteStats(g, v.data).pct === 100; }).length;
+  const fullyDone = visites.filter(v => {
+    const g = GARES.find(x=>x.nom===v.gare);
+    return g && visiteStats(g, v.data).pct === 100;
+  }).length;
   const inProgress = visited - fullyDone;
   const todayStr = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
   const ribbon = GARES.map(g => {
     const v = all[g.nom];
     if (!v) return "todo";
@@ -567,80 +672,153 @@ function HomeScreen({ all, auteur, onChangeAuteur, onPick, onOpen, onExport }) {
     return pct === 100 ? "done" : "wip";
   });
 
-  return <div style={{ flex: 1, overflowY: "auto", background: "var(--paper-light)", position: "relative" }}>
-    <div style={{ background: "var(--ink)", color: "var(--paper)", position: "sticky", top: 0, zIndex: 10 }}>
-      <div style={{ padding: "10px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(245,242,235,0.15)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ background: "var(--red)", color: "var(--paper-light)", padding: "3px 7px", fontWeight: 800, fontSize: 11, letterSpacing: ".2em", borderRadius: 1 }}>AREP</div>
-          <span style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".14em", textTransform: "uppercase" }}>×</span>
-          <span style={{ fontSize: 10, opacity: .85, letterSpacing: ".12em", textTransform: "uppercase", fontWeight: 600 }}>SERM Touraine</span>
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: "var(--paper-light)", position: "relative" }}>
+      <div style={{ background: "var(--ink)", color: "var(--paper)", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ padding: "10px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(245,242,235,0.15)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: "var(--red)", color: "var(--paper-light)", padding: "3px 7px", fontWeight: 800, fontSize: 11, letterSpacing: ".2em", borderRadius: 1 }}>AREP</div>
+            <span style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".14em", textTransform: "uppercase" }}>×</span>
+            <span style={{ fontSize: 10, opacity: .85, letterSpacing: ".12em", textTransform: "uppercase", fontWeight: 600 }}>SERM Touraine</span>
+          </div>
+          <button onClick={onChangeAuteur} style={{ color: "var(--paper)", fontSize: 11, padding: "4px 8px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2 }}>
+            {auteur}
+          </button>
         </div>
-        <button onClick={onChangeAuteur} style={{ color: "var(--paper)", fontSize: 11, padding: "4px 8px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2 }}>{auteur}</button>
+
+        <div style={{ padding: "7px 18px", display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(245,242,235,.6)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 600 }}>
+          <span>{todayStr}</span>
+          <button onClick={onExport} style={{ color: "rgba(245,242,235,.85)", fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 700 }}>
+            ⇣ Export
+          </button>
+        </div>
       </div>
-      <div style={{ padding: "7px 18px", display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(245,242,235,.6)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 600 }}>
-        <span>{todayStr}</span>
-        <button onClick={onExport} style={{ color: "rgba(245,242,235,.85)", fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 700 }}>⇣ Export</button>
+
+      <div style={{ padding: "22px 22px 100px", position: "relative" }}>
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 9.5, letterSpacing: ".16em", color: "var(--taupe)", textTransform: "uppercase", fontWeight: 700, marginBottom: 18 }}>
+            ◆ Carnet · SERM Touraine
+          </div>
+          <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.025em", lineHeight: 1.05 }}>
+            Salut <span style={{ color: "var(--red)" }}>{auteur}</span>.
+          </h1>
+          <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 12, lineHeight: 1.5 }}>
+            {visited === 0
+              ? "Première visite ? Choisis une gare et c'est parti."
+              : `${inProgress} visite${inProgress>1?"s":""} en cours · ${fullyDone} validée${fullyDone>1?"s":""}.`}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, margin: "22px 0 14px" }}>
+          <HomeStat value={fullyDone} label="Validées" sub="100% relevé" color="var(--green)" />
+          <HomeStat value={inProgress} label="En cours" sub="à terminer" color="var(--red)" pulse />
+          <HomeStat value={totalGares - visited} label="À visiter" sub={`sur ${totalGares}`} color="var(--taupe)" pale />
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+            <span style={{ fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink)", fontWeight: 800 }}>
+              Avancement réseau
+            </span>
+            <span className="tabular" style={{ fontSize: 11, color: "var(--ink-soft)", fontWeight: 700 }}>
+              <b>{visited}</b><span style={{ color: "var(--taupe-light)" }}> sur {totalGares}</span>
+            </span>
+          </div>
+          <div style={{ height: 10, display: "flex", gap: 2, padding: 1, background: "var(--paper-deep)", border: "1px solid var(--border)", borderRadius: 1 }}>
+            {ribbon.map((s,i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  background: s === "done" ? "var(--green)" : s === "wip" ? "var(--red)" : "transparent",
+                  animation: s === "wip" ? "sermBlink 2s ease-in-out infinite" : "none"
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={onPick}
+          style={{
+            width: "100%",
+            padding: "20px 22px",
+            background: "var(--red)",
+            color: "var(--paper-light)",
+            fontSize: 17,
+            fontWeight: 800,
+            letterSpacing: ".04em",
+            borderRadius: 2,
+            position: "relative",
+            overflow: "hidden",
+            boxShadow: "0 14px 32px -10px rgba(200,16,46,.55), 0 2px 0 rgba(0,0,0,.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10
+          }}
+        >
+          <span aria-hidden style={{ position: "absolute", top: 0, bottom: 0, width: "40%", left: "-50%", background: "linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent)", animation: "sermShine 3.5s ease-in-out infinite" }}/>
+          <span style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
+            <span style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(245,242,235,.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>+</span>
+            <span>Démarrer une visite</span>
+          </span>
+          <span style={{ position: "relative" }}>→</span>
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "30px 0 12px" }}>
+          <div className="kicker" style={{ color: "var(--ink)", fontSize: 10 }}>Sur le terrain</div>
+          <div style={{ flex: 1, height: 1, background: "var(--border)" }}/>
+          <span className="tabular" style={{ fontSize: 10.5, color: "var(--ink-soft)", fontWeight: 700 }}>
+            {String(visites.length).padStart(2,"0")}
+          </span>
+        </div>
+
+        {visites.length === 0 ? (
+          <div style={{ border: "1px dashed var(--border)", padding: "20px 16px", textAlign: "center", background: "var(--paper)", color: "var(--taupe)", fontSize: 12 }}>
+            Aucune visite enregistrée.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {visites.map((v,i) => {
+              const g = GARES.find(x=>x.nom===v.gare);
+              if (!g) return null;
+              const stats = visiteStats(g, v.data);
+              const done = stats.pct === 100;
+              return (
+                <button
+                  key={v.gare}
+                  onClick={() => onOpen(v.gare)}
+                  style={{
+                    background: "var(--white)",
+                    border: "1px solid var(--border)",
+                    borderLeft: `3px solid ${done ? "var(--green)" : stats.pct > 0 ? "var(--red)" : "var(--border)"}`,
+                    padding: "12px 14px 11px",
+                    textAlign: "left",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 13
+                  }}
+                >
+                  <span className="tabular" style={{ fontSize: 11, fontWeight: 800, color: "var(--taupe-light)", alignSelf: "flex-start", marginTop: 2 }}>
+                    {String(i+1).padStart(2,"0")}
+                  </span>
+                  <ProgressRing pct={stats.pct} size={42} stroke={3} color={done ? "var(--green)" : "var(--red)"}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h4 style={{ fontSize: 14.5, fontWeight: 800 }}>{v.gare}</h4>
+                    <div style={{ fontSize: 10, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", marginTop: 5 }}>
+                      {g.cat_pro?.split("-")[0]?.trim()} · {g.ligne_flux} · <span style={{ textTransform: "lowercase", fontStyle: "italic" }}>{fmtAgo(v.updated)}</span>
+                    </div>
+                  </div>
+                  <span style={{ color: "var(--taupe)", fontSize: 14 }}>›</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
-
-    <div style={{ padding: "22px 22px 100px", position: "relative" }}>
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 9.5, letterSpacing: ".16em", color: "var(--taupe)", textTransform: "uppercase", fontWeight: 700, marginBottom: 18 }}>◆ Carnet · SERM Touraine</div>
-        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.025em", lineHeight: 1.05 }}>Salut <span style={{ color: "var(--red)" }}>{auteur}</span>.</h1>
-        <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 12, lineHeight: 1.5 }}>
-          {visited === 0 ? "Première visite ? Choisis une gare et c'est parti." : `${inProgress} visite${inProgress>1?"s":""} en cours · ${fullyDone} validée${fullyDone>1?"s":""}.`}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, margin: "22px 0 14px" }}>
-        <HomeStat value={fullyDone} label="Validées" sub="100% relevé" color="var(--green)" />
-        <HomeStat value={inProgress} label="En cours" sub="à terminer" color="var(--red)" pulse />
-        <HomeStat value={totalGares - visited} label="À visiter" sub={`sur ${totalGares}`} color="var(--taupe)" pale />
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-          <span style={{ fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink)", fontWeight: 800 }}>Avancement réseau</span>
-          <span className="tabular" style={{ fontSize: 11, color: "var(--ink-soft)", fontWeight: 700 }}><b>{visited}</b><span style={{ color: "var(--taupe-light)" }}> sur {totalGares}</span></span>
-        </div>
-        <div style={{ height: 10, display: "flex", gap: 2, padding: 1, background: "var(--paper-deep)", border: "1px solid var(--border)", borderRadius: 1 }}>
-          {ribbon.map((s,i) => <div key={i} style={{ flex: 1, background: s === "done" ? "var(--green)" : s === "wip" ? "var(--red)" : "transparent", animation: s === "wip" ? "sermBlink 2s ease-in-out infinite" : "none" }} />)}
-        </div>
-      </div>
-
-      <button onClick={onPick} style={{ width: "100%", padding: "20px 22px", background: "var(--red)", color: "var(--paper-light)", fontSize: 17, fontWeight: 800, letterSpacing: ".04em", borderRadius: 2, position: "relative", overflow: "hidden", boxShadow: "0 14px 32px -10px rgba(200,16,46,.55), 0 2px 0 rgba(0,0,0,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span aria-hidden style={{ position: "absolute", top: 0, bottom: 0, width: "40%", left: "-50%", background: "linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent)", animation: "sermShine 3.5s ease-in-out infinite" }}/>
-        <span style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}><span style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(245,242,235,.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>+</span><span>Démarrer une visite</span></span>
-        <span style={{ position: "relative" }}>→</span>
-      </button>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "30px 0 12px" }}>
-        <div className="kicker" style={{ color: "var(--ink)", fontSize: 10 }}>Sur le terrain</div><div style={{ flex: 1, height: 1, background: "var(--border)" }}/><span className="tabular" style={{ fontSize: 10.5, color: "var(--ink-soft)", fontWeight: 700 }}>{String(visites.length).padStart(2,"0")}</span>
-      </div>
-
-      {visites.length === 0 ? <div style={{ border: "1px dashed var(--border)", padding: "20px 16px", textAlign: "center", background: "var(--paper)", color: "var(--taupe)", fontSize: 12 }}>Aucune visite enregistrée.</div> :
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {visites.map((v,i) => {
-            const g = GARES.find(x=>x.nom===v.gare); if (!g) return null;
-            const stats = visiteStats(g, v.data); const done = stats.pct === 100;
-            return <button key={v.gare} onClick={() => onOpen(v.gare)} style={{ background: "var(--white)", border: "1px solid var(--border)", borderLeft: `3px solid ${done ? "var(--green)" : stats.pct > 0 ? "var(--red)" : "var(--border)"}`, padding: "12px 14px 11px", textAlign: "left", display: "flex", alignItems: "center", gap: 13 }}>
-              <span className="tabular" style={{ fontSize: 11, fontWeight: 800, color: "var(--taupe-light)", alignSelf: "flex-start", marginTop: 2 }}>{String(i+1).padStart(2,"0")}</span>
-              <ProgressRing pct={stats.pct} size={42} stroke={3} color={done ? "var(--green)" : "var(--red)"}/>
-              <div style={{ flex: 1, minWidth: 0 }}><h4 style={{ fontSize: 14.5, fontWeight: 800 }}>{v.gare}</h4><div style={{ fontSize: 10, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", marginTop: 5 }}>{g.cat_pro?.split("-")[0]?.trim()} · {g.ligne_flux} · <span style={{ textTransform: "lowercase", fontStyle: "italic" }}>{fmtAgo(v.updated)}</span></div></div>
-              <span style={{ color: "var(--taupe)", fontSize: 14 }}>›</span>
-            </button>;
-          })}
-        </div>
-      }
-    </div>
-  </div>;
-}
-function HomeStat({ value, label, sub, color, pulse, pale }) {
-  return <div style={{ background: pale ? "var(--paper)" : "var(--white)", border: pale ? "1px dashed var(--border)" : "1px solid var(--border)", borderTop: `3px solid ${color}`, borderRadius: 2, padding: "12px 12px 10px" }}>
-    <div className="tabular" style={{ fontWeight: 800, fontSize: 32, lineHeight: 1, letterSpacing: "-.04em", color: pale ? "var(--taupe)" : "var(--ink)" }}>{value}</div>
-    <div style={{ fontSize: 9.5, letterSpacing: ".14em", textTransform: "uppercase", color, fontWeight: 800, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>{pulse && <span style={{ width:6,height:6,borderRadius:"50%",background:color,animation:"sermBlink 1.4s ease-in-out infinite" }}/>} {label}</div>
-    <div style={{ fontSize: 10, color: "var(--taupe)", marginTop: 2 }}>{sub}</div>
-  </div>;
+  );
 }
 
 /* ============================================================
@@ -649,21 +827,87 @@ function HomeStat({ value, label, sub, color, pulse, pale }) {
 function PickerScreen({ all, onBack, onPick }) {
   const [q, setQ] = useState("");
   const visited = new Set(Object.keys(all));
-  const filtered = GARES.filter(g => `${g.nom} ${g.axe} ${g.secteur} ${g.ligne_flux}`.toLowerCase().includes(q.toLowerCase()));
-  return <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--paper-light)" }}>
-    <div style={{ background: "var(--ink)", color: "var(--paper)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}><button onClick={onBack} style={{ color: "var(--paper)", fontSize: 14 }}>← Retour</button><div className="kicker" style={{ fontSize: 10.5 }}>Choisir une gare</div></div>
-    <div style={{ padding: "18px 20px 8px" }}><input autoFocus type="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher une gare, un axe…" style={{ width: "100%", padding: "13px 16px", fontSize: 15, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 2, outline: "none" }}/><div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11, color: "var(--taupe)" }}><span>{filtered.length} gare{filtered.length>1?"s":""}</span><span><span style={{ color: "var(--green)" }}>●</span> {visited.size} visitée{visited.size>1?"s":""}</span></div></div>
-    <div style={{ flex: 1, overflowY: "auto", padding: "4px 16px 24px" }} className="serm-scroll"><div style={{ background: "var(--white)", border: "1px solid var(--border)" }}>{filtered.map((g,i)=> <button key={g.nom} onClick={()=>onPick(g.nom)} style={{ width: "100%", padding: "13px 16px", borderBottom: i === filtered.length - 1 ? "none" : "1px solid var(--border-soft)", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14.5, fontWeight: 700 }}>{g.nom}</div><div style={{ fontSize: 10, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", marginTop: 3 }}>{g.ligne_flux} · {g.secteur} · <span style={{ color: "var(--ink-soft)" }}>{getTypologie(g).split(" (")[0]}</span></div></div>{visited.has(g.nom) && <span style={{ color: "var(--green)", fontSize: 18 }}>✓</span>}</button>)}</div></div>
-  </div>;
+  const filtered = GARES.filter(g =>
+    `${g.nom} ${g.axe} ${g.secteur} ${g.ligne_flux}`.toLowerCase().includes(q.toLowerCase())
+  );
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--paper-light)" }}>
+      <div style={{ background: "var(--ink)", color: "var(--paper)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+        <button onClick={onBack} style={{ color: "var(--paper)", fontSize: 14 }}>← Retour</button>
+        <div className="kicker" style={{ fontSize: 10.5 }}>Choisir une gare</div>
+      </div>
+
+      <div style={{ padding: "18px 20px 8px" }}>
+        <input
+          autoFocus
+          type="search"
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+          placeholder="Rechercher une gare, un axe…"
+          style={{
+            width: "100%",
+            padding: "13px 16px",
+            fontSize: 15,
+            background: "var(--white)",
+            border: "1.5px solid var(--border)",
+            borderRadius: 2,
+            outline: "none"
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11, color: "var(--taupe)" }}>
+          <span>{filtered.length} gare{filtered.length>1?"s":""}</span>
+          <span><span style={{ color: "var(--green)" }}>●</span> {visited.size} visitée{visited.size>1?"s":""}</span>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 16px 24px" }} className="serm-scroll">
+        <div style={{ background: "var(--white)", border: "1px solid var(--border)" }}>
+          {filtered.map((g,i)=> (
+            <button
+              key={g.nom}
+              onClick={()=>onPick(g.nom)}
+              style={{
+                width: "100%",
+                padding: "13px 16px",
+                borderBottom: i === filtered.length - 1 ? "none" : "1px solid var(--border-soft)",
+                textAlign: "left",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 700 }}>{g.nom}</div>
+                <div style={{ fontSize: 10, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", marginTop: 3 }}>
+                  {g.ligne_flux} · {g.secteur} · <span style={{ color: "var(--ink-soft)" }}>{getTypologie(g)}</span>
+                </div>
+              </div>
+              {visited.has(g.nom) && <span style={{ color: "var(--green)", fontSize: 18 }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ============================================================
-   FORM
+   FORM — sans encarts Flux / section bloquée
    ============================================================ */
 function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onToast }) {
-  const sections = useMemo(() => SECTIONS.filter(s => !s.skipIf || !s.skipIf(gare, visite.data)), [gare, visite.data]);
-  const [activeId, setActiveId] = useState(sections[0]?.id || "bureau");
-  useEffect(() => { if (!sections.find(s => s.id === activeId)) setActiveId(sections[0]?.id); }, [sections, activeId]);
+  const sections = useMemo(
+    () => SECTIONS.filter(s => !s.skipIf || !s.skipIf(gare, visite.data)),
+    [gare, visite.data]
+  );
+
+  const [activeId, setActiveId] = useState(sections[0]?.id || "carac");
+
+  useEffect(() => {
+    if (!sections.find(s => s.id === activeId)) setActiveId(sections[0]?.id);
+  }, [sections, activeId]);
+
   const stats = visiteStats(gare, visite.data);
   const activeSection = sections.find(s => s.id === activeId) || sections[0];
   const activeIdx = sections.findIndex(s => s.id === activeSection?.id);
@@ -674,134 +918,539 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
     const cur = visite.data[cid];
     const hasExtras = cur && typeof cur === "object" && !Array.isArray(cur) && (cur.note || (cur.photos && cur.photos.length));
     let next;
-    if (val !== null && typeof val === "object" && !Array.isArray(val)) next = hasExtras ? { ...val, note: cur.note || "", photos: cur.photos || [] } : val;
-    else if (hasExtras) next = { ...cur, val };
-    else next = val;
+    if (val !== null && typeof val === "object" && !Array.isArray(val)) {
+      next = hasExtras ? { ...val, note: cur.note || "", photos: cur.photos || [] } : val;
+    } else if (hasExtras) {
+      next = { ...cur, val };
+    } else {
+      next = val;
+    }
     onUpdate({ ...visite, data: { ...visite.data, [cid]: next }, updated: Date.now() });
   };
-  const clearVal = (cid) => { const d = { ...visite.data }; delete d[cid]; onUpdate({ ...visite, data: d, updated: Date.now() }); };
-  const setNote = (cid, note) => { const cur = visite.data[cid]; const obj = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : { val: cur }; onUpdate({ ...visite, data: { ...visite.data, [cid]: { ...obj, note } }, updated: Date.now() }); };
-  const setPhotos = (cid, photos) => { const cur = visite.data[cid]; const obj = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : { val: cur }; onUpdate({ ...visite, data: { ...visite.data, [cid]: { ...obj, photos } }, updated: Date.now() }); };
-  const goTo = (idx) => { if (idx >= 0 && idx < sections.length) { setActiveId(sections[idx].id); setTimeout(()=>panelRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 0); } };
+
+  const clearVal = (cid) => {
+    const d = { ...visite.data };
+    delete d[cid];
+    onUpdate({ ...visite, data: d, updated: Date.now() });
+  };
+
+  const setNote = (cid, note) => {
+    const cur = visite.data[cid];
+    const obj = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : { val: cur };
+    onUpdate({ ...visite, data: { ...visite.data, [cid]: { ...obj, note } }, updated: Date.now() });
+  };
+
+  const setPhotos = (cid, photos) => {
+    const cur = visite.data[cid];
+    const obj = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : { val: cur };
+    onUpdate({ ...visite, data: { ...visite.data, [cid]: { ...obj, photos } }, updated: Date.now() });
+  };
+
+  const goTo = (idx) => {
+    if (idx >= 0 && idx < sections.length) {
+      setActiveId(sections[idx].id);
+      setTimeout(() => panelRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 0);
+    }
+  };
+
   const goToNext = () => goTo(activeIdx + 1);
   const goToPrev = () => goTo(activeIdx - 1);
 
-  return <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--paper-light)", minHeight: 0 }}>
-    <div style={{ background: "var(--ink)", color: "var(--paper)", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 8 }}>
-      <button onClick={onBack} style={{ color: "var(--paper)", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>← <span className="kicker" style={{ fontSize: 10 }}>Carnet</span></button>
-      <div style={{ display: "flex", gap: 6 }}><button onClick={onOverview} style={{ color: "var(--paper)", fontSize: 11, padding: "5px 10px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2 }}>⊙ Vue d'ensemble</button><button onClick={onDelete} title="Supprimer" style={{ color: "var(--paper)", fontSize: 13, padding: "5px 9px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2, opacity: .7 }}>🗑</button></div>
-    </div>
+  if (!activeSection) return null;
 
-    <div style={{ background: "var(--paper-light)", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-      <div style={{ padding: "14px 18px 6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}><div className="kicker" style={{ color: "var(--red)", fontSize: 9.5, marginBottom: 4 }}>{gare.cat_sgp} · {gare.ligne_flux}</div><h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.025em", lineHeight: 1.05 }}>{gare.nom}</h2><div style={{ fontSize: 10.5, color: "var(--taupe)", marginTop: 3, letterSpacing: ".04em", textTransform: "uppercase" }}>UIC {gare.uic} · {gare.secteur}</div><div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, padding: "3px 8px", background: "var(--paper-deep)", border: "1px solid var(--border)", borderRadius: 2, fontSize: 10, color: "var(--ink-soft)", fontWeight: 600 }}><span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--ink-soft)" }}/>{getTypologie(gare)}</div></div>
-        <ProgressRing pct={stats.pct} size={48} />
-      </div>
-
-      <div style={{ padding: "0 14px 10px" }}><div style={{ background: "var(--white)", border: "1px solid var(--border)", padding: "6px 8px 4px" }}><StationProgress gare={gare} visite={visite} activeId={activeId}/></div></div>
-
-      <div className="serm-scroll" style={{ display: "flex", gap: 6, padding: "4px 14px 12px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        {sections.map(s => { const st = sectionStats(s, visite.data); const done = st.filled === st.total && st.total > 0; const partial = st.filled > 0 && !done; const active = s.id === activeId; return <button key={s.id} onClick={()=>setActiveId(s.id)} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 99, background: active ? "var(--red)" : s.bureau ? "var(--bureau-bg)" : "var(--white)", color: active ? "var(--paper-light)" : done ? "var(--green)" : "var(--ink-soft)", border: `1px solid ${active ? "var(--red)" : done ? "var(--green-soft)" : "var(--border)"}`, fontSize: 11.5, fontWeight: active ? 800 : 600, whiteSpace: "nowrap" }}><span className="tabular" style={{ width: 16, height: 16, borderRadius: "50%", background: active ? "var(--paper-light)" : done ? "var(--green)" : "var(--paper-deep)", color: active ? "var(--red)" : done ? "var(--paper-light)" : "var(--taupe)", fontSize: 9.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{done ? "✓" : s.n}</span>{s.short}{partial && !active && <span className="tabular" style={{ fontSize: 9.5, color: "var(--taupe)" }}>{st.filled}/{st.total}</span>}</button>; })}
-      </div>
-    </div>
-
-    <div ref={panelRef} className="serm-scroll" style={{ flex: 1, overflowY: "auto", background: activeSection?.bureau ? "#F5F7F9" : "var(--white)", minHeight: 0 }}>
-      <div style={{ padding: "18px 18px 100px" }}>
-        {activeSection?.synth && <InfoBox red><strong>Synthèse de visite</strong> — ressenti global + classifications. À remplir en fin de visite.</InfoBox>}
-
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
-          <div className="tabular" style={{ fontSize: 36, fontWeight: 800, lineHeight: .9, color: activeSection?.bureau ? "var(--bureau)" : "var(--red)", letterSpacing: "-.04em" }}>{String(Math.floor(activeSection?.n ?? 0)).padStart(2,"0")}</div>
-          <div style={{ flex: 1, minWidth: 0 }}><h3 style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1 }}>{activeSection?.title}</h3><div style={{ fontSize: 11.5, color: "var(--taupe)", marginTop: 3 }}>{activeSection?.subtitle}</div></div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}><div className="tabular" style={{ fontSize: 13, fontWeight: 800, color: sStats.filled === sStats.total ? "var(--green)" : "var(--ink)" }}>{sStats.filled}<span style={{ color: "var(--taupe-light)", fontWeight: 500 }}>/{sStats.total}</span></div><div style={{ fontSize: 9.5, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase" }}>relevés</div></div>
-        </div>
-        <div style={{ height: 1.5, background: "var(--ink)", width: 30, marginBottom: 18 }} />
-        {activeIdx < sections.length - 1 && <button onClick={goToNext} style={{ width: "100%", padding: "8px 12px", marginBottom: 16, background: "transparent", border: "1px dashed var(--border)", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, color: "var(--taupe)", letterSpacing: ".02em" }}><span><span style={{ fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase" }}>Sauter à </span><span style={{ color: "var(--ink)", fontWeight: 700 }}>{sections[activeIdx+1]?.short}</span></span><span style={{ color: "var(--ink)" }}>→</span></button>}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {activeSection?.criteria.map(c => <Criterion key={c.id} c={c} raw={visite.data[c.id]} gareName={gare.nom} locked={false} onSetVal={v=>setVal(c.id, v)} onSetNote={n=>setNote(c.id, n)} onSetPhotos={p=>setPhotos(c.id, p)} onClear={()=>clearVal(c.id)} onToast={onToast}/>)}
-        </div>
-
-        <div style={{ marginTop: 30, padding: "18px 0 0", borderTop: "1px dashed var(--border)" }}>
-          <div style={{ display: "flex", gap: 8 }}><button onClick={goToPrev} disabled={activeIdx === 0} style={{ flex: 1, padding: "13px 14px", background: "var(--white)", border: "1px solid var(--border)", borderRadius: 2, fontWeight: 700, fontSize: 13, color: activeIdx === 0 ? "var(--taupe-light)" : "var(--ink)", opacity: activeIdx === 0 ? .4 : 1 }}>← {sections[activeIdx-1]?.short || ""}</button><button onClick={goToNext} disabled={activeIdx === sections.length - 1} style={{ flex: 2, padding: "13px 14px", background: "var(--ink)", color: "var(--paper-light)", borderRadius: 2, fontWeight: 800, fontSize: 13, letterSpacing: ".04em", textTransform: "uppercase", opacity: activeIdx === sections.length - 1 ? .4 : 1 }}>{activeIdx === sections.length - 1 ? "Fin" : `Section suivante →`}</button></div>
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--paper-light)", minHeight: 0 }}>
+      <div style={{ background: "var(--ink)", color: "var(--paper)", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 8 }}>
+        <button onClick={onBack} style={{ color: "var(--paper)", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          ← <span className="kicker" style={{ fontSize: 10 }}>Carnet</span>
+        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onOverview} style={{ color: "var(--paper)", fontSize: 11, padding: "5px 10px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2 }}>
+            ⊙ Vue d'ensemble
+          </button>
+          <button onClick={onDelete} title="Supprimer" style={{ color: "var(--paper)", fontSize: 13, padding: "5px 9px", border: "1px solid rgba(245,242,235,.2)", borderRadius: 2, opacity: .7 }}>
+            🗑
+          </button>
         </div>
       </div>
+
+      <div style={{ background: "var(--paper-light)", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ padding: "14px 18px 6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="kicker" style={{ color: "var(--red)", fontSize: 9.5, marginBottom: 4 }}>
+              {gare.cat_sgp} · {gare.ligne_flux}
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.025em", lineHeight: 1.05 }}>{gare.nom}</h2>
+            <div style={{ fontSize: 10.5, color: "var(--taupe)", marginTop: 3, letterSpacing: ".04em", textTransform: "uppercase" }}>
+              UIC {gare.uic} · {gare.secteur}
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, padding: "3px 8px", background: "var(--paper-deep)", border: "1px solid var(--border)", borderRadius: 2, fontSize: 10, color: "var(--ink-soft)", fontWeight: 600 }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--ink-soft)" }}/>
+              {getTypologie(gare)}
+            </div>
+          </div>
+          <ProgressRing pct={stats.pct} size={48} />
+        </div>
+
+        <div style={{ padding: "0 14px 10px" }}>
+          <div style={{ background: "var(--white)", border: "1px solid var(--border)", padding: "6px 8px 4px" }}>
+            <StationProgress gare={gare} visite={visite} activeId={activeId}/>
+          </div>
+        </div>
+
+        <div className="serm-scroll" style={{ display: "flex", gap: 6, padding: "4px 14px 12px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          {sections.map(s => {
+            const st = sectionStats(s, visite.data);
+            const done = st.filled === st.total && st.total > 0;
+            const partial = st.filled > 0 && !done;
+            const active = s.id === activeId;
+
+            return (
+              <button
+                key={s.id}
+                onClick={()=>setActiveId(s.id)}
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 11px",
+                  borderRadius: 99,
+                  background: active ? "var(--red)" : s.bureau ? "var(--bureau-bg)" : "var(--white)",
+                  color: active ? "var(--paper-light)" : done ? "var(--green)" : "var(--ink-soft)",
+                  border: `1px solid ${active ? "var(--red)" : done ? "var(--green-soft)" : "var(--border)"}`,
+                  fontSize: 11.5,
+                  fontWeight: active ? 800 : 600,
+                  whiteSpace: "nowrap"
+                }}
+              >
+                <span className="tabular" style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  background: active ? "var(--paper-light)" : done ? "var(--green)" : "var(--paper-deep)",
+                  color: active ? "var(--red)" : done ? "var(--paper-light)" : "var(--taupe)",
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                  {done ? "✓" : s.n}
+                </span>
+                {s.short}
+                {partial && !active && <span className="tabular" style={{ fontSize: 9.5, color: "var(--taupe)" }}>{st.filled}/{st.total}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div ref={panelRef} className="serm-scroll" style={{ flex: 1, overflowY: "auto", background: activeSection?.bureau ? "#F5F7F9" : "var(--white)", minHeight: 0 }}>
+        <div style={{ padding: "18px 18px 100px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+            <div className="tabular" style={{ fontSize: 36, fontWeight: 800, lineHeight: .9, color: activeSection?.bureau ? "var(--bureau)" : "var(--red)", letterSpacing: "-.04em" }}>
+              {String(Math.floor(activeSection?.n ?? 0)).padStart(2,"0")}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1 }}>{activeSection?.title}</h3>
+              <div style={{ fontSize: 11.5, color: "var(--taupe)", marginTop: 3 }}>{activeSection?.subtitle}</div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div className="tabular" style={{ fontSize: 13, fontWeight: 800, color: sStats.filled === sStats.total ? "var(--green)" : "var(--ink)" }}>
+                {sStats.filled}<span style={{ color: "var(--taupe-light)", fontWeight: 500 }}>/{sStats.total}</span>
+              </div>
+              <div style={{ fontSize: 9.5, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase" }}>relevés</div>
+            </div>
+          </div>
+
+          <div style={{ height: 1.5, background: "var(--ink)", width: 30, marginBottom: 18 }} />
+
+          {activeIdx < sections.length - 1 && (
+            <button
+              onClick={goToNext}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                marginBottom: 16,
+                background: "transparent",
+                border: "1px dashed var(--border)",
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: 11.5,
+                color: "var(--taupe)",
+                letterSpacing: ".02em"
+              }}
+            >
+              <span>
+                <span style={{ fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase" }}>Sauter à </span>
+                <span style={{ color: "var(--ink)", fontWeight: 700 }}>{sections[activeIdx+1]?.short}</span>
+              </span>
+              <span style={{ color: "var(--ink)" }}>→</span>
+            </button>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {activeSection?.criteria.map(c => (
+              <Criterion
+                key={c.id}
+                c={c}
+                raw={visite.data[c.id]}
+                gareName={gare.nom}
+                onSetVal={v=>setVal(c.id, v)}
+                onSetNote={n=>setNote(c.id, n)}
+                onSetPhotos={p=>setPhotos(c.id, p)}
+                onClear={()=>clearVal(c.id)}
+                onToast={onToast}
+              />
+            ))}
+          </div>
+
+          <div style={{ marginTop: 30, padding: "18px 0 0", borderTop: "1px dashed var(--border)" }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={goToPrev}
+                disabled={activeIdx === 0}
+                style={{
+                  flex: 1,
+                  padding: "13px 14px",
+                  background: "var(--white)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 2,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: activeIdx === 0 ? "var(--taupe-light)" : "var(--ink)",
+                  opacity: activeIdx === 0 ? .4 : 1
+                }}
+              >
+                ← {sections[activeIdx-1]?.short || ""}
+              </button>
+              <button
+                onClick={goToNext}
+                disabled={activeIdx === sections.length - 1}
+                style={{
+                  flex: 2,
+                  padding: "13px 14px",
+                  background: "var(--ink)",
+                  color: "var(--paper-light)",
+                  borderRadius: 2,
+                  fontWeight: 800,
+                  fontSize: 13,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  opacity: activeIdx === sections.length - 1 ? .4 : 1
+                }}
+              >
+                {activeIdx === sections.length - 1 ? "Fin" : "Section suivante →"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={onBack}
+        title="Retour au carnet"
+        aria-label="Retour au carnet"
+        style={{
+          position: "fixed",
+          bottom: 20,
+          right: 16,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: "var(--ink)",
+          color: "var(--paper-light)",
+          border: "3px solid var(--paper-light)",
+          boxShadow: "0 4px 14px rgba(26,26,26,.25), 0 1px 3px rgba(26,26,26,.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 50
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 11.5 L12 4 L21 11.5" />
+          <path d="M5 10 V20 H10 V14 H14 V20 H19 V10" />
+        </svg>
+      </button>
     </div>
-  </div>;
-}
-function InfoBox({ children, dark, red }) {
-  return <div style={{ background: dark ? "var(--bureau)" : red ? "var(--red-tint)" : "var(--paper-deep)", color: dark ? "var(--paper-light)" : "var(--ink-soft)", borderLeft: dark ? "none" : `3px solid ${red ? "var(--red)" : "var(--bureau)"}`, padding: dark ? "12px 14px" : "10px 12px", fontSize: 12, marginBottom: 16, borderRadius: dark ? 2 : 0, lineHeight: 1.5 }}>{children}</div>;
+  );
 }
 
 /* ============================================================
    CRITERIA INPUTS
    ============================================================ */
 function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear, onToast }) {
-  const value = getVal(raw), note = getNote(raw), photos = getPhotos(raw), filled = isFilled(c, raw);
+  const value = getVal(raw);
+  const note = getNote(raw);
+  const photos = getPhotos(raw);
+  const filled = isFilled(c, raw);
   const [showNote, setShowNote] = useState(!!note);
-  const cameraRef = useRef(null), galleryRef = useRef(null);
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
   const compVal = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
   const setComp = patch => onSetVal({ ...compVal, ...patch });
   const photoCount = photos.length;
 
   const handleFiles = async (e) => {
-    const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    e.target.value = "";
     let next = [...photos];
-    for (const file of files) { const p = await dataUrlFromFile(file); next = [...next, p]; onSetPhotos(next); }
+    for (const file of files) {
+      const p = await dataUrlFromFile(file);
+      next = [...next, p];
+      onSetPhotos(next);
+    }
     onToast?.("Photo ajoutée ✓", "success");
   };
-  const removePhotoAt = (idx) => { const next = photos.filter((_,i)=>i!==idx); onSetPhotos(next); };
 
-  return <div style={{ borderLeft: `3px solid ${filled ? "var(--green-soft)" : "var(--border)"}`, paddingLeft: 12, paddingTop: 6, paddingBottom: 6, transition: "border-color .2s" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
-      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{c.label}</div>{c.help && <div style={{ fontSize: 11.5, color: "var(--taupe)", fontStyle: "italic", marginTop: 2 }}>{c.help}</div>}</div>
-      <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>{c.tag && <span style={{ fontSize: 8.5, fontWeight: 800, padding: "2px 5px", borderRadius: 1, letterSpacing: ".08em", textTransform: "uppercase", background: c.tag === "amont" ? "var(--paper-shade)" : "var(--bureau-bg)", color: c.tag === "amont" ? "var(--ink-soft)" : "var(--bureau)", border: `1px solid ${c.tag === "amont" ? "var(--taupe-light)" : "var(--bureau)"}` }}>{c.tag}</span>}{filled && <button onClick={onClear} title="Effacer" style={{ fontSize: 10, color: "var(--taupe)", padding: "2px 5px", opacity: .75 }}>↺</button>}</div>
+  const removePhotoAt = (idx) => {
+    const next = photos.filter((_,i)=>i!==idx);
+    onSetPhotos(next);
+  };
+
+  return (
+    <div style={{ borderLeft: `3px solid ${filled ? "var(--green-soft)" : "var(--border)"}`, paddingLeft: 12, paddingTop: 6, paddingBottom: 6, transition: "border-color .2s" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{c.label}</div>
+          {c.help && <div style={{ fontSize: 11.5, color: "var(--taupe)", fontStyle: "italic", marginTop: 2 }}>{c.help}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+          {c.tag && (
+            <span style={{ fontSize: 8.5, fontWeight: 800, padding: "2px 5px", borderRadius: 1, letterSpacing: ".08em", textTransform: "uppercase", background: c.tag === "amont" ? "var(--paper-shade)" : "var(--bureau-bg)", color: c.tag === "amont" ? "var(--ink-soft)" : "var(--bureau)", border: `1px solid ${c.tag === "amont" ? "var(--taupe-light)" : "var(--bureau)"}` }}>
+              {c.tag}
+            </span>
+          )}
+          {filled && <button onClick={onClear} title="Effacer" style={{ fontSize: 10, color: "var(--taupe)", padding: "2px 5px", opacity: .75 }}>↺</button>}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 10, display: "flex", gap: 8, alignItems: "stretch" }}>
+        <input type="file" accept="image/*" capture="environment" multiple ref={cameraRef} onChange={handleFiles} style={{ display: "none" }}/>
+        <input type="file" accept="image/*" multiple ref={galleryRef} onChange={handleFiles} style={{ display: "none" }}/>
+        <button onClick={()=>cameraRef.current?.click()} style={{ flex: 1, padding: "10px 12px", background: photoCount > 0 ? "var(--ink)" : "var(--paper)", color: photoCount > 0 ? "var(--paper-light)" : "var(--ink)", border: photoCount > 0 ? "1.5px solid var(--ink)" : "1.5px dashed var(--taupe-light)", borderRadius: 4, fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          ▣ {photoCount > 0 ? `${photoCount} photo${photoCount>1?"s":""}` : "Prendre une photo"}
+        </button>
+        <button onClick={()=>galleryRef.current?.click()} title="Galerie" style={{ padding: "10px 12px", minWidth: 44, border: "1.5px dashed var(--taupe-light)", borderRadius: 4, background: "var(--paper-light)", color: "var(--taupe)" }}>
+          ▧
+        </button>
+      </div>
+
+      {photoCount > 0 && (
+        <div style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))", gap: 6 }}>
+          {photos.map((p,i)=>(
+            <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 2, overflow: "hidden", border: "1px solid var(--border)", background: "var(--paper)", cursor: "pointer" }} onClick={()=>openLightbox(p.url)}>
+              <img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}/>
+              <button onClick={(e)=>{e.stopPropagation(); removePhotoAt(i);}} style={{ position: "absolute", top: 2, right: 2, width: 20, height: 20, borderRadius: "50%", background: "rgba(26,26,26,.7)", color: "var(--paper)", fontSize: 12, fontWeight: 800 }}>
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {c.type === "presence" && <Presence value={value} onSet={onSetVal}/>}
+      {c.type === "rating" && <RatingFixed c={c} value={value} onSet={onSetVal}/>}
+      {c.type === "count" && <CountInput value={value} onSet={onSetVal}/>}
+      {c.type === "choice" && <ChoiceSelect c={c} value={value} onSet={onSetVal}/>}
+      {c.type === "multi" && <MultiSelect c={c} value={value} onSet={onSetVal}/>}
+      {c.type === "number" && <NumberInput value={value} onSet={onSetVal}/>}
+      {c.type === "text" && <TextInput value={value} onSet={onSetVal}/>}
+      {c.type === "pn" && <CompositePN value={compVal} onSet={setComp}/>}
+      {c.type === "pne" && <CompositePNE value={compVal} onSet={setComp}/>}
+
+      <button onClick={()=>setShowNote(s=>!s)} style={{ marginTop: 8, fontSize: 11, color: note ? "var(--ink)" : "var(--taupe)", display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 0", fontWeight: note ? 800 : 500 }}>
+        {showNote ? "−" : "+"} note libre {note && <span style={{ fontSize: 10, color: "var(--taupe)" }}>· {note.length>30 ? note.slice(0,30)+"…" : note}</span>}
+      </button>
+
+      {showNote && (
+        <div style={{ marginTop: 6 }}>
+          <textarea
+            placeholder="Précision, contexte ou observation libre…"
+            rows={2}
+            value={note}
+            onChange={e=>onSetNote(e.target.value)}
+            style={{ width: "100%", padding: "8px 10px", fontSize: 12.5, border: "1px solid var(--border)", borderRadius: 2, background: "var(--paper-light)", resize: "vertical", outline: "none", minHeight: 48, lineHeight: 1.4 }}
+          />
+        </div>
+      )}
     </div>
-
-    <div style={{ marginBottom: 10, display: "flex", gap: 8, alignItems: "stretch" }}>
-      <input type="file" accept="image/*" capture="environment" multiple ref={cameraRef} onChange={handleFiles} style={{ display: "none" }}/>
-      <input type="file" accept="image/*" multiple ref={galleryRef} onChange={handleFiles} style={{ display: "none" }}/>
-      <button onClick={()=>cameraRef.current?.click()} style={{ flex: 1, padding: "10px 12px", background: photoCount > 0 ? "var(--ink)" : "var(--paper)", color: photoCount > 0 ? "var(--paper-light)" : "var(--ink)", border: photoCount > 0 ? "1.5px solid var(--ink)" : "1.5px dashed var(--taupe-light)", borderRadius: 4, fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>▣ {photoCount > 0 ? `${photoCount} photo${photoCount>1?"s":""}` : "Prendre une photo"}</button>
-      <button onClick={()=>galleryRef.current?.click()} title="Galerie" style={{ padding: "10px 12px", minWidth: 44, border: "1.5px dashed var(--taupe-light)", borderRadius: 4, background: "var(--paper-light)", color: "var(--taupe)" }}>▧</button>
-    </div>
-
-    {photoCount > 0 && <div style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))", gap: 6 }}>{photos.map((p,i)=><div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 2, overflow: "hidden", border: "1px solid var(--border)", background: "var(--paper)", cursor: "pointer" }} onClick={()=>openLightbox(p.url)}><img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}/><button onClick={(e)=>{e.stopPropagation(); removePhotoAt(i);}} style={{ position: "absolute", top: 2, right: 2, width: 20, height: 20, borderRadius: "50%", background: "rgba(26,26,26,.7)", color: "var(--paper)", fontSize: 12, fontWeight: 800 }}>×</button></div>)}</div>}
-
-    {c.type === "presence" && <Presence value={value} onSet={onSetVal}/>} 
-    {c.type === "rating" && <RatingFixed c={c} value={value} onSet={onSetVal}/>} 
-    {c.type === "count" && <CountInput value={value} onSet={onSetVal}/>} 
-    {c.type === "choice" && <ChoiceSelect c={c} value={value} onSet={onSetVal}/>} 
-    {c.type === "multi" && <MultiSelect c={c} value={value} onSet={onSetVal}/>} 
-    {c.type === "number" && <NumberInput value={value} onSet={onSetVal}/>} 
-    {c.type === "text" && <TextInput value={value} onSet={onSetVal}/>} 
-    {c.type === "pn" && <CompositePN value={compVal} onSet={setComp}/>} 
-    {c.type === "pne" && <CompositePNE value={compVal} onSet={setComp}/>} 
-
-    <button onClick={()=>setShowNote(s=>!s)} style={{ marginTop: 8, fontSize: 11, color: note ? "var(--ink)" : "var(--taupe)", display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 0", fontWeight: note ? 800 : 500 }}>{showNote ? "−" : "+"} note libre {note && <span style={{ fontSize: 10, color: "var(--taupe)" }}>· {note.length>30 ? note.slice(0,30)+"…" : note}</span>}</button>
-    {showNote && <div style={{ marginTop: 6 }}><textarea placeholder="Précision, contexte ou observation libre…" rows={2} value={note} onChange={e=>onSetNote(e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: 12.5, border: "1px solid var(--border)", borderRadius: 2, background: "var(--paper-light)", resize: "vertical", outline: "none", minHeight: 48, lineHeight: 1.4 }}/></div>}
-  </div>;
+  );
 }
 
 function Presence({ value, onSet }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>{[
-    {v:"no",label:"Absent",icon:"∅",bg:"var(--ink-soft)",shadow:"var(--ink)"}, {v:"yes",label:"Présent",icon:"●",bg:"var(--green)",shadow:"#0F4226"}
-  ].map(b=>{ const active=value===b.v; return <button key={b.v} onClick={()=>onSet(b.v)} style={{ padding: "14px 8px", border: `1.5px solid ${active ? b.bg : "var(--border)"}`, background: active ? b.bg : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 14, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52, transform: active ? "translateY(-1px)" : "none", boxShadow: active ? `0 2px 0 ${b.shadow}, 0 6px 14px -4px ${b.bg}` : "none" }}><span style={{ width: 22, height: 22, borderRadius: "50%", background: active ? "rgba(255,255,255,.22)" : "var(--paper)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{b.icon}</span>{b.label}</button>; })}</div>;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {[
+        {v:"no",label:"Absent",icon:"∅",bg:"var(--ink-soft)",shadow:"var(--ink)"},
+        {v:"yes",label:"Présent",icon:"●",bg:"var(--green)",shadow:"#0F4226"}
+      ].map(b=>{
+        const active=value===b.v;
+        return (
+          <button key={b.v} onClick={()=>onSet(b.v)} style={{ padding: "14px 8px", border: `1.5px solid ${active ? b.bg : "var(--border)"}`, background: active ? b.bg : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 14, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52, transform: active ? "translateY(-1px)" : "none", boxShadow: active ? `0 2px 0 ${b.shadow}, 0 6px 14px -4px ${b.bg}` : "none" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: active ? "rgba(255,255,255,.22)" : "var(--paper)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{b.icon}</span>
+            {b.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
+
 function RatingFixed({ c, value, onSet }) {
   const vals = c.scale === 4 ? [0,.33,.66,1] : c.scale === 3 ? [0,.5,1] : [0,1];
   const colorFor = v => v === 0 ? ["var(--red)","var(--red-dark)"] : v < .55 ? ["var(--amber)","#8E5500"] : v < .85 ? ["var(--green-soft)","var(--green)"] : ["var(--green)","#0F4226"];
-  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${vals.length}, 1fr)`, gap: 6 }}>{vals.map((v,i)=>{ const active=value===v; const [solid,shadow]=colorFor(v); return <button key={v} onClick={()=>onSet(v)} style={{ padding: "12px 4px", border: `1.5px solid ${active ? solid : "var(--border)"}`, background: active ? solid : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 11.5, fontWeight: active ? 800 : 600, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minHeight: 60, lineHeight: 1.15, textAlign: "center", transform: active ? "translateY(-1px)" : "none", boxShadow: active ? `0 2px 0 ${shadow}, 0 5px 12px -4px ${solid}` : "none" }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "var(--paper-light)" : solid, opacity: active ? 1 : .45 }}/><span>{c.labels[i]}</span></button>; })}</div>;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${vals.length}, 1fr)`, gap: 6 }}>
+      {vals.map((v,i)=>{
+        const active=value===v;
+        const [solid,shadow]=colorFor(v);
+        return (
+          <button key={v} onClick={()=>onSet(v)} style={{ padding: "12px 4px", border: `1.5px solid ${active ? solid : "var(--border)"}`, background: active ? solid : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 11.5, fontWeight: active ? 800 : 600, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minHeight: 60, lineHeight: 1.15, textAlign: "center", transform: active ? "translateY(-1px)" : "none", boxShadow: active ? `0 2px 0 ${shadow}, 0 5px 12px -4px ${solid}` : "none" }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "var(--paper-light)" : solid, opacity: active ? 1 : .45 }}/>
+            <span>{c.labels[i]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
+
 function CountInput({ value, onSet }) {
-  const cur = value === undefined || value === null || value === "" ? "" : Number(value); const filled = cur !== "" && cur !== 0;
-  return <div style={{ display: "flex", alignItems: "stretch", border: `1.5px solid ${filled ? "var(--green-soft)" : "var(--border)"}`, borderRadius: 4, background: "var(--white)", overflow: "hidden", maxWidth: 220, minHeight: 50 }}><button onClick={()=>onSet(Math.max(0,(Number(cur)||0)-1))} style={{ width: 50, fontSize: 22, fontWeight: 800, color: "var(--ink-soft)", background: "var(--paper-light)", borderRight: "1px solid var(--border)" }}>−</button><input type="number" min="0" inputMode="numeric" value={cur === "" ? "" : cur} placeholder="0" onChange={e=>onSet(e.target.value===""?"":Number(e.target.value))} className="tabular" style={{ flex: 1, minWidth: 0, border: "none", textAlign: "center", fontSize: 20, fontWeight: 800, padding: 4, background: cur === 0 ? "var(--paper-light)" : "var(--white)", color: cur === 0 ? "var(--taupe)" : filled ? "var(--green)" : "var(--ink)", outline: "none" }}/><button onClick={()=>onSet((Number(cur)||0)+1)} style={{ width: 50, fontSize: 22, fontWeight: 800, color: "var(--ink-soft)", background: "var(--paper-light)", borderLeft: "1px solid var(--border)" }}>+</button></div>;
+  const cur = value === undefined || value === null || value === "" ? "" : Number(value);
+  const filled = cur !== "" && cur !== 0;
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", border: `1.5px solid ${filled ? "var(--green-soft)" : "var(--border)"}`, borderRadius: 4, background: "var(--white)", overflow: "hidden", maxWidth: 220, minHeight: 50 }}>
+      <button onClick={()=>onSet(Math.max(0,(Number(cur)||0)-1))} style={{ width: 50, fontSize: 22, fontWeight: 800, color: "var(--ink-soft)", background: "var(--paper-light)", borderRight: "1px solid var(--border)" }}>−</button>
+      <input
+        type="number"
+        min="0"
+        inputMode="numeric"
+        value={cur === "" ? "" : cur}
+        placeholder="0"
+        onChange={e=>onSet(e.target.value===""?"":Number(e.target.value))}
+        className="tabular"
+        style={{ flex: 1, minWidth: 0, border: "none", textAlign: "center", fontSize: 20, fontWeight: 800, padding: 4, background: cur === 0 ? "var(--paper-light)" : "var(--white)", color: cur === 0 ? "var(--taupe)" : filled ? "var(--green)" : "var(--ink)", outline: "none" }}
+      />
+      <button onClick={()=>onSet((Number(cur)||0)+1)} style={{ width: 50, fontSize: 22, fontWeight: 800, color: "var(--ink-soft)", background: "var(--paper-light)", borderLeft: "1px solid var(--border)" }}>+</button>
+    </div>
+  );
 }
-function NumberInput({ value, onSet }) { return <input type="number" inputMode="numeric" value={value ?? ""} onChange={e=>onSet(e.target.value===""?"":Number(e.target.value))} placeholder="—" className="tabular" style={{ width: "100%", maxWidth: 220, padding: "12px 14px", border: "1.5px solid var(--border)", borderRadius: 2, fontSize: 15, background: "var(--white)", outline: "none" }}/>; }
-function TextInput({ value, onSet }) { return <textarea rows={3} value={value ?? ""} onChange={e=>onSet(e.target.value)} placeholder="Écrire ici…" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid var(--border)", borderRadius: 2, background: "var(--white)", outline: "none", resize: "vertical", minHeight: 72 }}/>; }
-function ChoiceSelect({ c, value, onSet }) { return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{c.choices.map(ch=>{ const active=value===ch; return <button key={ch} onClick={()=>onSet(ch)} style={{ padding: "12px 14px", textAlign: "left", border: `1.5px solid ${active ? "var(--red)" : "var(--border)"}`, background: active ? "var(--red-tint)" : "var(--white)", color: active ? "var(--red-dark)" : "var(--ink-soft)", borderRadius: 4, fontSize: 13, fontWeight: active ? 800 : 600, display: "flex", alignItems: "center", gap: 11, transform: active ? "translateX(2px)" : "none" }}><span style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${active ? "var(--red)" : "var(--taupe-light)"}`, background: active ? "var(--red)" : "transparent", flexShrink: 0 }}>{active && <span style={{ display: "block", margin: 4, width: 8, height: 8, borderRadius: "50%", background: "var(--paper-light)" }}/>}</span>{ch}</button>; })}</div>; }
-function MultiSelect({ c, value, onSet }) { const sel=Array.isArray(value)?value:[]; const toggle=ch=>onSet(sel.includes(ch)?sel.filter(x=>x!==ch):[...sel,ch]); return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{c.choices.map(ch=>{ const active=sel.includes(ch); return <button key={ch} onClick={()=>toggle(ch)} style={{ padding: "11px 14px", textAlign: "left", border: `1.5px solid ${active ? "var(--ink)" : "var(--border)"}`, background: active ? "var(--ink)" : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 13, fontWeight: active ? 800 : 600, display: "flex", alignItems: "center", gap: 11 }}><span style={{ width: 16, height: 16, borderRadius: 3, border: `1.5px solid ${active ? "var(--paper-light)" : "var(--taupe-light)"}`, background: active ? "var(--paper-light)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink)", fontSize: 11, fontWeight: 800 }}>{active && "✓"}</span>{ch}</button>; })}</div>; }
-function CompositePN({ value, onSet }) { return <div style={{ display: "flex", flexDirection: "column", gap: 8 }}><Presence value={value.presence} onSet={v=>onSet({ presence: v, nb: v === "no" ? 0 : value.nb })}/>{value.presence === "yes" && <div><div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>Combien ?</div><CountInput value={value.nb} onSet={v=>onSet({ presence: "yes", nb: v })}/></div>}</div>; }
-function CompositePNE({ value, onSet }) { return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}><Presence value={value.presence} onSet={v=>onSet({ presence: v, nb: v === "no" ? 0 : value.nb, etat: v === "no" ? undefined : value.etat })}/>{value.presence === "yes" && <><div><div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>Combien ?</div><CountInput value={value.nb} onSet={v=>onSet({ ...value, presence: "yes", nb: v })}/></div><div><div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>État général</div><RatingFixed c={{ scale: 4, labels: ["Mauvais", "Moyen", "Bon", "Très bon"] }} value={value.etat} onSet={v=>onSet({ ...value, presence: "yes", etat: v })}/></div></>}</div>; }
-function openLightbox(url) { let el=document.getElementById("lightbox-overlay"); if(!el){ el=document.createElement("div"); el.id="lightbox-overlay"; el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;cursor:pointer;"; el.onclick=()=>el.remove(); document.body.appendChild(el); } el.innerHTML=`<img src="${url}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;"/><button style="position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:white;font-size:22px;border:none;cursor:pointer;">×</button>`; }
+
+function NumberInput({ value, onSet }) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      value={value ?? ""}
+      onChange={e=>onSet(e.target.value===""?"":Number(e.target.value))}
+      placeholder="—"
+      className="tabular"
+      style={{ width: "100%", maxWidth: 220, padding: "12px 14px", border: "1.5px solid var(--border)", borderRadius: 2, fontSize: 15, background: "var(--white)", outline: "none" }}
+    />
+  );
+}
+
+function TextInput({ value, onSet }) {
+  return (
+    <textarea
+      rows={3}
+      value={value ?? ""}
+      onChange={e=>onSet(e.target.value)}
+      placeholder="Écrire ici…"
+      style={{ width: "100%", padding: "10px 12px", border: "1.5px solid var(--border)", borderRadius: 2, background: "var(--white)", outline: "none", resize: "vertical", minHeight: 72 }}
+    />
+  );
+}
+
+function ChoiceSelect({ c, value, onSet }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {c.choices.map(ch=>{
+        const active=value===ch;
+        return (
+          <button key={ch} onClick={()=>onSet(ch)} style={{ padding: "12px 14px", textAlign: "left", border: `1.5px solid ${active ? "var(--red)" : "var(--border)"}`, background: active ? "var(--red-tint)" : "var(--white)", color: active ? "var(--red-dark)" : "var(--ink-soft)", borderRadius: 4, fontSize: 13, fontWeight: active ? 800 : 600, display: "flex", alignItems: "center", gap: 11, transform: active ? "translateX(2px)" : "none" }}>
+            <span style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${active ? "var(--red)" : "var(--taupe-light)"}`, background: active ? "var(--red)" : "transparent", flexShrink: 0 }}>
+              {active && <span style={{ display: "block", margin: 4, width: 8, height: 8, borderRadius: "50%", background: "var(--paper-light)" }}/>}
+            </span>
+            {ch}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MultiSelect({ c, value, onSet }) {
+  const sel=Array.isArray(value)?value:[];
+  const toggle=ch=>onSet(sel.includes(ch)?sel.filter(x=>x!==ch):[...sel,ch]);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {c.choices.map(ch=>{
+        const active=sel.includes(ch);
+        return (
+          <button key={ch} onClick={()=>toggle(ch)} style={{ padding: "11px 14px", textAlign: "left", border: `1.5px solid ${active ? "var(--ink)" : "var(--border)"}`, background: active ? "var(--ink)" : "var(--white)", color: active ? "var(--paper-light)" : "var(--ink-soft)", borderRadius: 4, fontSize: 13, fontWeight: active ? 800 : 600, display: "flex", alignItems: "center", gap: 11 }}>
+            <span style={{ width: 16, height: 16, borderRadius: 3, border: `1.5px solid ${active ? "var(--paper-light)" : "var(--taupe-light)"}`, background: active ? "var(--paper-light)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink)", fontSize: 11, fontWeight: 800 }}>
+              {active && "✓"}
+            </span>
+            {ch}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CompositePN({ value, onSet }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Presence value={value.presence} onSet={v=>onSet({ presence: v, nb: v === "no" ? 0 : value.nb })}/>
+      {value.presence === "yes" && (
+        <div>
+          <div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>Combien ?</div>
+          <CountInput value={value.nb} onSet={v=>onSet({ presence: "yes", nb: v })}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompositePNE({ value, onSet }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <Presence value={value.presence} onSet={v=>onSet({ presence: v, nb: v === "no" ? 0 : value.nb, etat: v === "no" ? undefined : value.etat })}/>
+      {value.presence === "yes" && (
+        <>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>Combien ?</div>
+            <CountInput value={value.nb} onSet={v=>onSet({ ...value, presence: "yes", nb: v })}/>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--taupe)", letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>État général</div>
+            <RatingFixed c={{ scale: 4, labels: ["Mauvais", "Moyen", "Bon", "Très bon"] }} value={value.etat} onSet={v=>onSet({ ...value, presence: "yes", etat: v })}/>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function openLightbox(url) {
+  let el=document.getElementById("lightbox-overlay");
+  if(!el){
+    el=document.createElement("div");
+    el.id="lightbox-overlay";
+    el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;cursor:pointer;";
+    el.onclick=()=>el.remove();
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<img src="${url}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;"/><button style="position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:white;font-size:22px;border:none;cursor:pointer;">×</button>`;
+}
 
 /* ============================================================
    OVERVIEW + EXPORT
@@ -810,12 +1459,97 @@ function OverviewScreen({ gare, visite, onBack, onZone, onExport }) {
   const sections = SECTIONS.filter(s => !s.skipIf || !s.skipIf(gare, visite.data));
   const stats = visiteStats(gare, visite.data);
   const missing = sections.flatMap(s => fillableCriteria(s).filter(c=>!isFilled(c, visite.data?.[c.id])).map(c=>({s,c})));
-  return <div style={{ flex:1, display:"flex", flexDirection:"column", background:"var(--paper-light)", minHeight:0 }}><div style={{ background:"var(--ink)", color:"var(--paper)", padding:"12px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}><button onClick={onBack} style={{ color:"var(--paper)", fontSize:13 }}>← Retour saisie</button><div className="kicker" style={{ fontSize:10 }}>Vue d'ensemble</div></div><div className="serm-scroll" style={{ flex:1, overflowY:"auto", padding:"20px 20px 40px" }}><Kicker color="var(--ink)">Carnet · {gare.nom}</Kicker><h2 style={{ fontSize:22, fontWeight:800, letterSpacing:"-.02em", marginTop:8, marginBottom:6 }}>{stats.pct === 100 ? "Visite complète." : `Visite en cours · ${stats.pct}%`}</h2><div style={{ height:3, width:30, background:"var(--red)", marginBottom:18 }}/><div className="kicker" style={{ color:"var(--taupe)", fontSize:10, marginBottom:10 }}>Décomposition par zone</div><div style={{ background:"var(--white)", border:"1px solid var(--border)" }}>{sections.map((s,i)=>{ const st=sectionStats(s, visite.data); const done=st.filled===st.total&&st.total>0; const pct=st.total===0?0:Math.round(st.filled/st.total*100); return <button key={s.id} onClick={()=>onZone(s.id)} style={{ width:"100%", padding:"12px 14px", textAlign:"left", borderBottom:i===sections.length-1?"none":"1px solid var(--border-soft)", display:"flex", alignItems:"center", gap:12 }}><span className="tabular" style={{ width:24,height:24,borderRadius:"50%",background:done?"var(--green)":st.filled>0?"var(--red)":"var(--paper-deep)",color:st.filled>0?"var(--paper-light)":"var(--taupe)",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{done?"✓":s.n}</span><div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13.5,fontWeight:700 }}>{s.title}</div><div style={{ display:"flex",gap:6,alignItems:"center",marginTop:5 }}><div style={{ flex:1,height:3,background:"var(--paper-deep)",borderRadius:1,overflow:"hidden",maxWidth:120 }}><div style={{ height:"100%",width:`${pct}%`,background:done?"var(--green)":"var(--red)" }}/></div><span className="tabular" style={{ fontSize:10.5,color:"var(--taupe)",fontWeight:700 }}>{st.filled}/{st.total}</span></div></div></button>; })}</div>{missing.length>0 && <><div className="kicker" style={{ color:"var(--red)",fontSize:10,marginTop:22,marginBottom:10 }}>Encore à relever · {missing.length}</div><div style={{ background:"var(--white)",border:"1px solid var(--border)",padding:"10px 14px",maxHeight:220,overflowY:"auto" }}>{missing.slice(0,20).map(({s,c},i)=><button key={c.id} onClick={()=>onZone(s.id)} style={{ display:"block",width:"100%",textAlign:"left",padding:"7px 0",borderBottom:i===Math.min(missing.length,20)-1?"none":"1px dotted var(--border-soft)",fontSize:12.5 }}><span style={{ color:"var(--taupe)",fontSize:9.5,letterSpacing:".06em",textTransform:"uppercase",marginRight:8 }}>{s.short}</span>{c.label}</button>)}</div></>}<button onClick={onExport} style={{ marginTop:22,width:"100%",padding:15,background:"var(--red)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2 }}>⇣ Exporter ce carnet</button></div></div>;
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", background:"var(--paper-light)", minHeight:0 }}>
+      <div style={{ background:"var(--ink)", color:"var(--paper)", padding:"12px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+        <button onClick={onBack} style={{ color:"var(--paper)", fontSize:13 }}>← Retour saisie</button>
+        <div className="kicker" style={{ fontSize:10 }}>Vue d'ensemble</div>
+      </div>
+
+      <div className="serm-scroll" style={{ flex:1, overflowY:"auto", padding:"20px 20px 40px" }}>
+        <Kicker color="var(--ink)">Carnet · {gare.nom}</Kicker>
+        <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:"-.02em", marginTop:8, marginBottom:6 }}>
+          {stats.pct === 100 ? "Visite complète." : `Visite en cours · ${stats.pct}%`}
+        </h2>
+        <div style={{ height:3, width:30, background:"var(--red)", marginBottom:18 }}/>
+
+        <div className="kicker" style={{ color:"var(--taupe)", fontSize:10, marginBottom:10 }}>Décomposition par zone</div>
+        <div style={{ background:"var(--white)", border:"1px solid var(--border)" }}>
+          {sections.map((s,i)=>{
+            const st=sectionStats(s, visite.data);
+            const done=st.filled===st.total&&st.total>0;
+            const pct=st.total===0?0:Math.round(st.filled/st.total*100);
+
+            return (
+              <button key={s.id} onClick={()=>onZone(s.id)} style={{ width:"100%", padding:"12px 14px", textAlign:"left", borderBottom:i===sections.length-1?"none":"1px solid var(--border-soft)", display:"flex", alignItems:"center", gap:12 }}>
+                <span className="tabular" style={{ width:24,height:24,borderRadius:"50%",background:done?"var(--green)":st.filled>0?"var(--red)":"var(--paper-deep)",color:st.filled>0?"var(--paper-light)":"var(--taupe)",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                  {done?"✓":s.n}
+                </span>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:13.5,fontWeight:700 }}>{s.title}</div>
+                  <div style={{ display:"flex",gap:6,alignItems:"center",marginTop:5 }}>
+                    <div style={{ flex:1,height:3,background:"var(--paper-deep)",borderRadius:1,overflow:"hidden",maxWidth:120 }}>
+                      <div style={{ height:"100%",width:`${pct}%`,background:done?"var(--green)":"var(--red)" }}/>
+                    </div>
+                    <span className="tabular" style={{ fontSize:10.5,color:"var(--taupe)",fontWeight:700 }}>{st.filled}/{st.total}</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {missing.length>0 && (
+          <>
+            <div className="kicker" style={{ color:"var(--red)",fontSize:10,marginTop:22,marginBottom:10 }}>
+              Encore à relever · {missing.length}
+            </div>
+            <div style={{ background:"var(--white)",border:"1px solid var(--border)",padding:"10px 14px",maxHeight:220,overflowY:"auto" }}>
+              {missing.slice(0,20).map(({s,c},i)=>(
+                <button key={c.id} onClick={()=>onZone(s.id)} style={{ display:"block",width:"100%",textAlign:"left",padding:"7px 0",borderBottom:i===Math.min(missing.length,20)-1?"none":"1px dotted var(--border-soft)",fontSize:12.5 }}>
+                  <span style={{ color:"var(--taupe)",fontSize:9.5,letterSpacing:".06em",textTransform:"uppercase",marginRight:8 }}>{s.short}</span>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <button onClick={onExport} style={{ marginTop:22,width:"100%",padding:15,background:"var(--red)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2 }}>
+          ⇣ Exporter ce carnet
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ExportScreen({ all, onBack, onExport }) {
   const visites = Object.values(all).sort((a,b)=>b.updated-a.updated);
-  return <div style={{ flex:1, display:"flex", flexDirection:"column", background:"var(--paper-light)", minHeight:0 }}><div style={{ background:"var(--ink)", color:"var(--paper)", padding:"14px 20px", display:"flex", alignItems:"center", gap:14, flexShrink:0 }}><button onClick={onBack} style={{ color:"var(--paper)", fontSize:14 }}>← Carnet</button><div className="kicker" style={{ fontSize:10.5 }}>Exporter</div></div><div style={{ flex:1, overflowY:"auto", padding:"22px 20px 40px" }}><Kicker color="var(--ink)">Carnet · Export</Kicker><h2 style={{ fontSize:22,fontWeight:800,letterSpacing:"-.025em",marginTop:8,marginBottom:6 }}>{visites.length} visite{visites.length>1?"s":""} disponible{visites.length>1?"s":""}</h2><div style={{ height:3,width:30,background:"var(--red)",marginBottom:22 }}/><button onClick={()=>onExport(visites,"xlsx","releve_SERM_Touraine")} disabled={!visites.length} style={{ width:"100%",padding:15,background:"var(--red)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2,opacity:visites.length?1:.4 }}>⇣ Exporter en Excel</button><button onClick={()=>onExport(visites,"csv","releve_SERM_Touraine")} disabled={!visites.length} style={{ marginTop:8,width:"100%",padding:15,background:"var(--ink)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2,opacity:visites.length?1:.4 }}>⇣ Exporter en CSV</button></div></div>;
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", background:"var(--paper-light)", minHeight:0 }}>
+      <div style={{ background:"var(--ink)", color:"var(--paper)", padding:"14px 20px", display:"flex", alignItems:"center", gap:14, flexShrink:0 }}>
+        <button onClick={onBack} style={{ color:"var(--paper)", fontSize:14 }}>← Carnet</button>
+        <div className="kicker" style={{ fontSize:10.5 }}>Exporter</div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"22px 20px 40px" }}>
+        <Kicker color="var(--ink)">Carnet · Export</Kicker>
+        <h2 style={{ fontSize:22,fontWeight:800,letterSpacing:"-.025em",marginTop:8,marginBottom:6 }}>
+          {visites.length} visite{visites.length>1?"s":""} disponible{visites.length>1?"s":""}
+        </h2>
+        <div style={{ height:3,width:30,background:"var(--red)",marginBottom:22 }}/>
+
+        <button onClick={()=>onExport(visites,"xlsx","releve_SERM_Touraine")} disabled={!visites.length} style={{ width:"100%",padding:15,background:"var(--red)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2,opacity:visites.length?1:.4 }}>
+          ⇣ Exporter en Excel
+        </button>
+        <button onClick={()=>onExport(visites,"csv","releve_SERM_Touraine")} disabled={!visites.length} style={{ marginTop:8,width:"100%",padding:15,background:"var(--ink)",color:"var(--paper-light)",fontWeight:800,fontSize:14,letterSpacing:".04em",textTransform:"uppercase",borderRadius:2,opacity:visites.length?1:.4 }}>
+          ⇣ Exporter en CSV
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /* ============================================================
@@ -826,42 +1560,234 @@ function App() {
   const [all, setAll] = useState(loadAll());
   const [auteur, setAuteur] = useState(localStorage.getItem("serm-touraine-auteur") || "Anonyme");
   const [toast, setToast] = useState(null);
+
   useEffect(()=>saveAll(all),[all]);
-  useEffect(()=>{ if(auteur==="Anonyme" && !localStorage.getItem("serm-touraine-auteur")){ const n=(prompt("Bienvenue ! Quel est ton prénom ou tes initiales ?")||"").trim(); if(n){ setAuteur(n); localStorage.setItem("serm-touraine-auteur",n); } } },[]);
-  const showToast = (msg,type="") => { setToast({ msg,type }); setTimeout(()=>setToast(null),2200); };
-  const changeAuteur = () => { const n=(prompt("Ton prénom ou tes initiales ?", auteur)||"").trim(); if(n){ setAuteur(n); localStorage.setItem("serm-touraine-auteur",n); } };
+
+  useEffect(()=>{
+    if(auteur==="Anonyme" && !localStorage.getItem("serm-touraine-auteur")){
+      const n=(prompt("Bienvenue ! Quel est ton prénom ou tes initiales ?")||"").trim();
+      if(n){
+        setAuteur(n);
+        localStorage.setItem("serm-touraine-auteur",n);
+      }
+    }
+  },[]);
+
+  const showToast = (msg,type="") => {
+    setToast({ msg,type });
+    setTimeout(()=>setToast(null),2200);
+  };
+
+  const changeAuteur = () => {
+    const n=(prompt("Ton prénom ou tes initiales ?", auteur)||"").trim();
+    if(n){
+      setAuteur(n);
+      localStorage.setItem("serm-touraine-auteur",n);
+    }
+  };
+
   const startVisite = (gareName) => {
     const g = GARES.find(x=>x.nom===gareName);
+    if(!g) return;
+
     if(!all[gareName]) {
-      const initialData = { carac_quais_nb_acc: g.quais, synth_typo_touraine: g.cat_sgp?.includes("Hub") ? "Hub métropolitain" : g.cat_pro?.startsWith("2") ? "Pôle de rabattement" : g.cat_pro?.startsWith("4") ? "Halte périurbaine" : "Gare urbaine" };
+      const initialData = {
+        carac_quais_nb_acc: g.quais,
+        synth_typo_touraine: g.cat_sgp?.includes("Hub")
+          ? "Hub métropolitain"
+          : g.cat_pro?.startsWith("2")
+            ? "Pôle de rabattement"
+            : g.cat_pro?.startsWith("4")
+              ? "Halte périurbaine"
+              : "Gare urbaine"
+      };
       const newV = { gare: gareName, data: initialData, updated: Date.now(), auteur };
       setAll(a=>({ ...a, [gareName]: newV }));
     }
+
     setRoute({ name: "form", gareName });
   };
-  const updateVisite = (v) => setAll(a=>({ ...a, [v.gare]: { ...v, auteur } }));
-  const deleteVisite = (gareName) => { if(!confirm(`Supprimer la visite de ${gareName} ?`)) return; setAll(a=>{ const n={...a}; delete n[gareName]; return n; }); showToast("Visite supprimée"); setRoute({ name:"home" }); };
-  const csvEscape = v => { if(v == null) return ""; const s=String(v); return /[",;\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+
+  const updateVisite = (v) => {
+    setAll(a=>({ ...a, [v.gare]: { ...v, auteur } }));
+  };
+
+  const deleteVisite = (gareName) => {
+    if(!confirm(`Supprimer la visite de ${gareName} ?`)) return;
+    setAll(a=>{
+      const n={...a};
+      delete n[gareName];
+      return n;
+    });
+    showToast("Visite supprimée");
+    setRoute({ name:"home" });
+  };
+
+  const csvEscape = v => {
+    if(v == null) return "";
+    const s=String(v);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+
   const buildTable = (visites) => {
     const meta=["gare","typologie","cat_pro","cat_sgp","ligne_flux","axe","secteur","auteur","updated","progression_pct"];
-    const crit=[]; SECTIONS.forEach(s=>s.criteria.forEach(c=>{ crit.push(`${s.id}__${c.id}__val`,`${s.id}__${c.id}__note`,`${s.id}__${c.id}__photos`); }));
-    const headers=[...meta,...crit]; const rows=[];
-    visites.forEach(v=>{ const g=GARES.find(x=>x.nom===v.gare); const stats=g?visiteStats(g,v.data):{pct:0}; const row=[v.gare,g?getTypologie(g):"",g?.cat_pro||"",g?.cat_sgp||"",g?.ligne_flux||"",g?.axe||"",g?.secteur||"",v.auteur||"",new Date(v.updated||Date.now()).toISOString(),stats.pct]; SECTIONS.forEach(s=>s.criteria.forEach(c=>{ const d=v.data?.[c.id]; let val="", note="", photos=""; if(Array.isArray(d)) val=d.join(" | "); else if(d && typeof d==="object"){ note=d.note||""; photos=(d.photos||[]).map(p=>p.name||p.url||"").join(" | "); if("presence" in d && !("val" in d)){ const parts=[d.presence==="yes"?"présent":d.presence==="no"?"absent":""]; if(d.nb!=null && d.nb!=="" && d.presence==="yes") parts.push(`nb=${d.nb}`); if(d.etat!=null && d.presence==="yes") parts.push(`état=${d.etat}`); val=parts.filter(Boolean).join(" / "); } else if("val" in d) val=Array.isArray(d.val)?d.val.join(" | "):(d.val??""); } else val=d??""; row.push(val,note,photos); })); rows.push(row); });
+    const crit=[];
+    SECTIONS.forEach(s=>s.criteria.forEach(c=>{
+      crit.push(`${s.id}__${c.id}__val`,`${s.id}__${c.id}__note`,`${s.id}__${c.id}__photos`);
+    }));
+
+    const headers=[...meta,...crit];
+    const rows=[];
+
+    visites.forEach(v=>{
+      const g=GARES.find(x=>x.nom===v.gare);
+      const stats=g?visiteStats(g,v.data):{pct:0};
+      const row=[
+        v.gare,
+        g?getTypologie(g):"",
+        g?.cat_pro||"",
+        g?.cat_sgp||"",
+        g?.ligne_flux||"",
+        g?.axe||"",
+        g?.secteur||"",
+        v.auteur||"",
+        new Date(v.updated||Date.now()).toISOString(),
+        stats.pct
+      ];
+
+      SECTIONS.forEach(s=>s.criteria.forEach(c=>{
+        const d=v.data?.[c.id];
+        let val="", note="", photos="";
+
+        if(Array.isArray(d)) {
+          val=d.join(" | ");
+        } else if(d && typeof d==="object") {
+          note=d.note||"";
+          photos=(d.photos||[]).map(p=>p.name||p.url||"").join(" | ");
+          if("presence" in d && !("val" in d)) {
+            const parts=[d.presence==="yes"?"présent":d.presence==="no"?"absent":""];
+            if(d.nb!=null && d.nb!=="" && d.presence==="yes") parts.push(`nb=${d.nb}`);
+            if(d.etat!=null && d.presence==="yes") parts.push(`état=${d.etat}`);
+            val=parts.filter(Boolean).join(" / ");
+          } else if("val" in d) {
+            val=Array.isArray(d.val)?d.val.join(" | "):(d.val??"");
+          }
+        } else {
+          val=d??"";
+        }
+
+        row.push(val,note,photos);
+      }));
+
+      rows.push(row);
+    });
+
     return { headers, rows };
   };
+
   const exportData = (visites, format, baseName) => {
-    if(!visites.length){ showToast("Aucune visite à exporter","error"); return; }
-    const today = new Date().toISOString().slice(0,10); const {headers, rows}=buildTable(visites);
-    if(format==="xlsx" && window.XLSX){ const ws=window.XLSX.utils.aoa_to_sheet([headers,...rows]); ws["!cols"]=headers.map(h=>({wch:Math.max(10,Math.min(35,h.length+2))})); const wb=window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb,ws,"Relevés Touraine"); window.XLSX.writeFile(wb,`${baseName}_${today}.xlsx`); }
-    else { const csv="\uFEFF"+[headers,...rows].map(r=>r.map(csvEscape).join(";")).join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`${baseName}_${today}.csv`; document.body.appendChild(a); a.click(); setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},200); }
+    if(!visites.length){
+      showToast("Aucune visite à exporter","error");
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0,10);
+    const {headers, rows}=buildTable(visites);
+
+    if(format==="xlsx" && window.XLSX){
+      const ws=window.XLSX.utils.aoa_to_sheet([headers,...rows]);
+      ws["!cols"]=headers.map(h=>({wch:Math.max(10,Math.min(35,h.length+2))}));
+      const wb=window.XLSX.utils.book_new();
+      window.XLSX.utils.book_append_sheet(wb,ws,"Relevés Touraine");
+      window.XLSX.writeFile(wb,`${baseName}_${today}.xlsx`);
+    } else {
+      const csv="\uFEFF"+[headers,...rows].map(r=>r.map(csvEscape).join(";")).join("\n");
+      const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download=`${baseName}_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},200);
+    }
+
     showToast("Export généré ✓","success");
   };
 
-  if(route.name==="home") return <><HomeScreen all={all} auteur={auteur} onChangeAuteur={changeAuteur} onPick={()=>setRoute({name:"picker"})} onOpen={g=>setRoute({name:"form",gareName:g})} onExport={()=>setRoute({name:"export"})}/><Toast toast={toast}/></>;
-  if(route.name==="picker") return <PickerScreen all={all} onBack={()=>setRoute({name:"home"})} onPick={startVisite}/>;
-  if(route.name==="export") return <><ExportScreen all={all} onBack={()=>setRoute({name:"home"})} onExport={exportData}/><Toast toast={toast}/></>;
-  if(route.name==="form") { const g=GARES.find(x=>x.nom===route.gareName); const v=all[route.gareName]; if(!g||!v){ setTimeout(()=>setRoute({name:"home"})); return null; } return <><FormScreen gare={g} visite={v} onUpdate={updateVisite} onBack={()=>setRoute({name:"home"})} onOverview={()=>setRoute({name:"overview",gareName:g.nom})} onDelete={()=>deleteVisite(g.nom)} onToast={showToast}/><Toast toast={toast}/></>; }
-  if(route.name==="overview") { const g=GARES.find(x=>x.nom===route.gareName); const v=all[route.gareName]; if(!g||!v){ setTimeout(()=>setRoute({name:"home"})); return null; } return <><OverviewScreen gare={g} visite={v} onBack={()=>setRoute({name:"form",gareName:g.nom})} onZone={id=>setRoute({name:"form",gareName:g.nom,jumpTo:id})} onExport={()=>exportData([v],"xlsx",`releve_${g.nom.replace(/[^a-z0-9_-]/gi,"_")}`)}/><Toast toast={toast}/></>; }
+  if(route.name==="home") {
+    return (
+      <>
+        <HomeScreen
+          all={all}
+          auteur={auteur}
+          onChangeAuteur={changeAuteur}
+          onPick={()=>setRoute({name:"picker"})}
+          onOpen={g=>setRoute({name:"form",gareName:g})}
+          onExport={()=>setRoute({name:"export"})}
+        />
+        <Toast toast={toast}/>
+      </>
+    );
+  }
+
+  if(route.name==="picker") {
+    return <PickerScreen all={all} onBack={()=>setRoute({name:"home"})} onPick={startVisite}/>;
+  }
+
+  if(route.name==="export") {
+    return (
+      <>
+        <ExportScreen all={all} onBack={()=>setRoute({name:"home"})} onExport={exportData}/>
+        <Toast toast={toast}/>
+      </>
+    );
+  }
+
+  if(route.name==="form") {
+    const g=GARES.find(x=>x.nom===route.gareName);
+    const v=all[route.gareName];
+    if(!g||!v){
+      setTimeout(()=>setRoute({name:"home"}));
+      return null;
+    }
+    return (
+      <>
+        <FormScreen
+          gare={g}
+          visite={v}
+          onUpdate={updateVisite}
+          onBack={()=>setRoute({name:"home"})}
+          onOverview={()=>setRoute({name:"overview",gareName:g.nom})}
+          onDelete={()=>deleteVisite(g.nom)}
+          onToast={showToast}
+        />
+        <Toast toast={toast}/>
+      </>
+    );
+  }
+
+  if(route.name==="overview") {
+    const g=GARES.find(x=>x.nom===route.gareName);
+    const v=all[route.gareName];
+    if(!g||!v){
+      setTimeout(()=>setRoute({name:"home"}));
+      return null;
+    }
+    return (
+      <>
+        <OverviewScreen
+          gare={g}
+          visite={v}
+          onBack={()=>setRoute({name:"form",gareName:g.nom})}
+          onZone={id=>setRoute({name:"form",gareName:g.nom,jumpTo:id})}
+          onExport={()=>exportData([v],"xlsx",`releve_${g.nom.replace(/[^a-z0-9_-]/gi,"_")}`)}
+        />
+        <Toast toast={toast}/>
+      </>
+    );
+  }
+
   return null;
 }
 
