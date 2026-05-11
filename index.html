@@ -705,6 +705,10 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
       </div>
     </div>
 
+    <div ref={panelRef} className="serm-scroll" style={{ flex: 1, overflowY: "auto", background: activeSection?.bureau ? "#F5F7F9" : "var(--white)", minHeight: 0 }}>
+      <div style={{ padding: "18px 18px 100px" }}>
+        {activeSection?.synth && <InfoBox red><strong>Synthèse de visite</strong> — ressenti global + classifications. À remplir en fin de visite.</InfoBox>}
+
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
           <div className="tabular" style={{ fontSize: 36, fontWeight: 800, lineHeight: .9, color: activeSection?.bureau ? "var(--bureau)" : "var(--red)", letterSpacing: "-.04em" }}>{String(Math.floor(activeSection?.n ?? 0)).padStart(2,"0")}</div>
           <div style={{ flex: 1, minWidth: 0 }}><h3 style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1 }}>{activeSection?.title}</h3><div style={{ fontSize: 11.5, color: "var(--taupe)", marginTop: 3 }}>{activeSection?.subtitle}</div></div>
