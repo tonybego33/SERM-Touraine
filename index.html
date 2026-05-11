@@ -183,13 +183,37 @@ const SECTIONS = [
   { id: 'velos_acc_quais', label: "Possibilité d'amener son vélo aux quais", type: 'presence' },
   { id: 'velos_etat', label: "État général des aménagements vélo", type: 'rating', scale: 4, labels: ['N/A', 'Mauvais', 'Moyen', 'Bon'] }]
 },
-{ id: 'tc', n: 5, title: 'Arrêts TC à proximité', short: 'TC', icon: '▭', subtitle: 'Confirmation visuelle des arrêts',
-  skipIf: (g, d) => d?.desk_tc_350 && getVal(d.desk_tc_350) === 'no',
+{ id: 'tc', n: 5, title: 'Arrêts TC & intermodalité', short: 'TC', icon: '▭', subtitle: 'Recensement complet — arrêts, abris, info, billettique',
   criteria: [
+  // ── Sous-bloc Arrêts bus
+  { _subhead: 'Arrêts bus', id: '_tc_h_bus', label: 'Arrêts bus à proximité', type: 'subhead' },
+  { id: 'tc_bus_nb_arrets', label: "Nombre d'arrêts de bus à proximité (< 350 m)", type: 'count' },
+  { id: 'tc_bus_nb_lignes', label: "Nombre de lignes de bus desservies", help: "Préciser les n° de lignes en note libre", type: 'count' },
+  { id: 'tc_bus_distance', label: "Distance au plus proche arrêt de bus", type: 'rating', scale: 4, labels: ['> 350 m', '200–350 m', '100–200 m', '< 100 m'] },
+  { id: 'tc_bus_quais_acc', label: "Quais bus accessibles PMR (rehaussés)", type: 'presence' },
+  { id: 'tc_bus_visibilite', label: "Arrêts bien visibles depuis la gare", type: 'presence' },
+
+  // ── Sous-bloc Abris & équipements d'attente
+  { _subhead: 'Abris & équipements', id: '_tc_h_abris', label: "Abris & équipements d'attente", type: 'subhead' },
+  { id: 'tc_abris_bus', label: "Abris bus", type: 'pne' },
+  { id: 'tc_assises_bus', label: "Assises aux arrêts bus", type: 'pne' },
+  { id: 'tc_eclairage_bus', label: "Éclairage aux arrêts bus", help: "⚠ Difficile à estimer en journée", type: 'rating', scale: 4, labels: ['Absent', 'Insuffisant', 'Moyen', 'Bon'] },
+  { id: 'tc_poubelles_bus', label: "Poubelles aux arrêts bus", type: 'pne' },
+  { id: 'tc_abris_velos_tc', label: "Stationnement vélos à proximité des arrêts bus", help: "En plus du stationnement vélo gare déjà couvert", type: 'presence' },
+
+  // ── Sous-bloc Information & billettique
+  { _subhead: 'Information & billettique', id: '_tc_h_info', label: 'Information & billettique', type: 'subhead' },
   { id: 'tc_info_dyn', label: "Écrans d'information dynamique TC", type: 'count' },
+  { id: 'tc_horaires_papier', label: "Horaires papier affichés aux arrêts", type: 'presence' },
+  { id: 'tc_plans_reseau', label: "Plans de réseau TC affichés", type: 'presence' },
   { id: 'tc_signal', label: "Signalétique intermodale extérieure", type: 'presence', help: "Panneaux indiquant les arrêts TC depuis la gare" },
-  { id: 'tc_billettique', label: "Automates ou valideurs TC à proximité", type: 'presence' },
-  { id: 'tc_qualite_attente', label: "Qualité des espaces d'attente TC", help: "Abris, assises, éclairage", type: 'rating', scale: 4, labels: ['Absent', 'Mauvaise', 'Moyenne', 'Bonne'] }]
+  { id: 'tc_billettique', label: "Automates ou valideurs TC à proximité", type: 'pne' },
+
+  // ── Sous-bloc Qualité globale
+  { _subhead: 'Qualité globale', id: '_tc_h_qual', label: 'Qualité globale du pôle TC', type: 'subhead' },
+  { id: 'tc_qualite_attente', label: "Qualité globale des espaces d'attente", help: "Abris, assises, éclairage, propreté", type: 'rating', scale: 4, labels: ['Absent', 'Mauvaise', 'Moyenne', 'Bonne'] },
+  { id: 'tc_continuite_pieton', label: "Continuité piétonne gare → arrêt TC", type: 'rating', scale: 4, labels: ['Absente', 'Mauvaise', 'Moyenne', 'Bonne'] },
+  { id: 'tc_traversees_secur', label: "Traversées piétonnes sécurisées vers les arrêts", type: 'presence' }]
 },
 { id: 'bv', n: 6, title: 'Bâtiment voyageurs', short: 'BV', icon: '◇', subtitle: "Hall, services, équipements",
   skipIf: (g, d) => {
@@ -261,7 +285,7 @@ const SECTIONS = [
    ============================================================ */
 const SUPA_URL = 'https://qjzsubyieblqdogxtvdl.supabase.co';
 const SUPA_KEY = 'sb_publishable_0qzDD61Vt4A9EvKXXoOUxQ_4WnpKUsN';
-const SUPA_TABLE = 'visites_touraine'; // <-- table dédiée Touraine, à créer dans Supabase (voir consigne)
+const SUPA_TABLE = 'visites_touraine'; // table dédiée Touraine
 const supa = (window.supabase && window.supabase.createClient)
   ? window.supabase.createClient(SUPA_URL, SUPA_KEY)
   : null;
@@ -406,18 +430,18 @@ const fmtAgo = (ts) => {
    Affiche un point rouge clignotant sur la gare en cours.
    ============================================================ */
 const SERM_LAYOUT = {
-  // Positions schématiques (% de viewBox 100x100) — basées sur la géographie Touraine.
-  // Amboise et Limeray sur l'axe Tours-Orléans (Vallée de la Loire, nord-est de Tours).
-  // Port-de-Piles sur l'axe Tours-Poitiers (sud de l'Indre-et-Loire).
+  // Positions schématiques (% de viewBox 100x100) — géographie Touraine.
+  // Amboise et Limeray sur l'axe Tours-Orléans (Vallée de la Loire, NE de Tours).
+  // Port-de-Piles sur l'axe Tours-Poitiers (sud Indre-et-Loire).
   "Limeray":       { x: 70, y: 28, hub: false },
   "Amboise":       { x: 60, y: 32, hub: true },
   "Port-de-Piles": { x: 35, y: 78, hub: false }
 };
 
 const SERM_LINES = [
-  // T01 — axe Tours-Orléans (Amboise, Limeray, prolongé virtuellement vers Tours au sud-ouest)
+  // T01 — axe Tours-Orléans (Amboise, Limeray)
   { stations: ['Limeray','Amboise'] }
-  // Port-de-Piles est sur l'axe Tours-Poitiers, isolé des 2 autres — pas de segment dans le périmètre des 3 gares
+  // Port-de-Piles isolé (axe Tours-Poitiers) — pas de segment
 ];
 
 function MiniSermMap({ gare }) {
