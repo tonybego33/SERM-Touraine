@@ -10,14 +10,14 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 <style>
 :root {
   --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-display: "Manrope", system-ui, sans-serif;
-  --font-serif: "Instrument Serif", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --red: #C8102E;
   --red-dark: #9E0B24;
@@ -35,14 +35,11 @@
   --border-soft: #E8E2D2;
   --green: #1D5E3A;
   --green-soft: #4A8F66;
-  --green-tint: #E5EFE8;
   --amber: #C77800;
   --amber-tint: #FAEFD9;
   --bureau: #2B3A4A;
   --bureau-bg: #EEF1F4;
   --white: #FFFFFF;
-  --shadow-sm: 0 1px 2px rgba(26,26,26,0.05);
-  --shadow: 0 1px 2px rgba(26,26,26,0.04), 0 4px 12px rgba(26,26,26,0.06);
   --shadow-lg: 0 8px 32px rgba(26,26,26,0.14);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -55,7 +52,7 @@ body {
 }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
-.serif, h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
 .tabular { font-variant-numeric: tabular-nums; }
 .kicker { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600; }
 
@@ -88,7 +85,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 /* ============================================================
-   DATA — sample subset (Touraine: 3 stations pilotes — Amboise, Limeray, Port de Piles)
+   DATA — gares Hauts-de-France (référentiel SERM)
    ============================================================ */
 const GARES = [
   {
@@ -132,7 +129,7 @@ const GARES = [
 /* ============================================================
    TYPOLOGIE DE GARE — d'après plan de voies (réf. Beuret)
    https://beuret.net/typologie-des-gares/
-   Adapté au contexte SERM Touraine (réseau TER existant, urbain/périurbain)
+   Adapté au contexte SERM Touraine (Vallée de la Loire / Sud Touraine)
    ============================================================ */
 const TYPOLOGIES = [
   'Halte simple (1 voie, 1 quai)',
@@ -158,9 +155,11 @@ const getTypologie = (gare) => {
 
 /* ============================================================
    SECTIONS — grille refondue en mode RECENSEMENT
-   "Absent" est une réponse explicite et claire partout où c'est pertinent.
-   Les sections peuvent se masquer dynamiquement selon les réponses
-   de la section Caractérisation (skipIf reçoit gare ET data).
+   ⚠ DEVENUE MUTABLE : peut être remplacée par la config Supabase
+   Les sections "système" (avec skipIf ou clé fonctionnelle)
+   ont system: true → leur SECTION ne peut pas être supprimée,
+   mais leurs CRITÈRES restent éditables/supprimables/extensibles.
+   Les nouveaux onglets créés par les users sont 100% supprimables.
    ============================================================ */
 const SECTIONS = [
   { id: "bureau", n: 0, title: "À préparer au bureau", short: "Bureau", icon: "✎", subtitle: "Données de contexte à renseigner avant ou après terrain", bureau: true, criteria: [
@@ -396,24 +395,82 @@ function setupRealtimeSync(onChange) {
 }
 
 /* Photo upload to Supabase Storage */
-async function uploadPhoto(gareName, critId, file) {
+/* ============================================================
+   PHOTOS — compression auto + upload
+   ============================================================
+   Par défaut on compresse (2000px max, JPEG 85%) → divise le poids
+   par 5-10. Si opts.hd=true, on upload tel quel (archive originale).
+   ============================================================ */
+
+// Compresse une image côté navigateur (Canvas API, pas de dépendance).
+// Compresse TOUJOURS (pas de skip taille) pour garantir un poids prévisible.
+async function compressImage(file, opts = {}) {
+  const maxDim = opts.maxDim || 1600;     // 1600px largement suffisant pour analyse terrain
+  const quality = opts.quality || 0.80;   // JPEG 80% — bon équilibre qualité/poids
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const ratio = Math.min(1, maxDim / Math.max(width, height));
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(img.src);
+        if (!blob) { resolve(file); return; }
+        const baseName = file.name.replace(/\.\w+$/, '');
+        const compressed = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+        const ratioPct = Math.round((1 - compressed.size / file.size) * 100);
+        console.log(`📷 Compression: ${(file.size/1024).toFixed(0)} KB → ${(compressed.size/1024).toFixed(0)} KB (-${ratioPct}%)`);
+        resolve(compressed);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('Image load failed')); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadPhoto(gareName, critId, file, opts = {}) {
+  // Compresser par défaut, sauf si opts.hd === true
+  const originalSize = file.size;
+  let toUpload = file;
+  try {
+    if (!opts.hd) toUpload = await compressImage(file);
+  } catch (e) { console.warn('Compression failed, uploading original:', e); }
+
   if (!supa) {
-    // Fallback : data URL local
+    // Fallback local : data URL
     return new Promise((resolve, reject) => {
       const r = new FileReader();
-      r.onload = () => resolve({ url: r.result, name: file.name, local: true });
+      r.onload = () => resolve({
+        url: r.result, name: toUpload.name, local: true,
+        hd: !!opts.hd, size: toUpload.size, originalSize
+      });
       r.onerror = reject;
-      r.readAsDataURL(file);
+      r.readAsDataURL(toUpload);
     });
   }
   const ts = Date.now();
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-40);
+  const safe = toUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-40);
   const slug = gareName.replace(/[^a-zA-Z0-9]/g, '_');
-  const path = `${slug}/${critId}_${ts}_${safe}`;
-  const { error } = await supa.storage.from('photos').upload(path, file, { contentType: file.type, upsert: false });
+  const hdTag = opts.hd ? '_HD' : '';
+  const path = `${slug}/${critId}${hdTag}_${ts}_${safe}`;
+  const { error } = await supa.storage.from('photos').upload(path, toUpload, {
+    contentType: toUpload.type, upsert: false
+  });
   if (error) throw error;
   const { data } = supa.storage.from('photos').getPublicUrl(path);
-  return { url: data.publicUrl, path, name: file.name };
+  return {
+    url: data.publicUrl, path, name: toUpload.name,
+    hd: !!opts.hd, size: toUpload.size, originalSize
+  };
 }
 
 async function deletePhoto(photo) {
@@ -424,6 +481,38 @@ async function deletePhoto(photo) {
 
 const seedDemo = () => { /* no-op: real data lives in Supabase */ };
 seedDemo();
+
+
+
+// Sérialiser : retirer les fonctions skipIf avant push (JSON ne les gère pas)
+
+// Désérialiser : rétablir skipIf pour les sections système
+
+// Push la grille courante vers Supabase
+
+// Pull la grille depuis Supabase. Si vide, on push la grille par défaut.
+
+// Realtime sync — quand quelqu'un d'autre modifie la grille
+
+/* === Manipulation de la grille — utilitaires CRUD === */
+
+// Génère un ID unique pour un nouveau critère ou onglet
+
+// Ajouter un critère à la fin d'une section
+
+// Modifier un critère existant (libellé, help, options/labels) — pas l'ID, pas le type
+
+// Supprimer un critère (soft : on le retire de la grille, mais les
+// réponses déjà saisies restent dans visites.data, récupérables si
+// on remet la question avec le même ID)
+
+// Ajouter un nouvel onglet (non-system)
+
+// Modifier le header d'un onglet (titre, short, icon, subtitle)
+
+// Supprimer un onglet (interdit pour les sections system)
+
+// Restaurer la grille par défaut (panic button)
 
 /* ============================================================
    HELPERS
@@ -452,6 +541,8 @@ const getNote = (raw) => (raw && typeof raw === 'object' && !Array.isArray(raw))
 const getPhotos = (raw) => (raw && typeof raw === 'object' && !Array.isArray(raw)) ? (raw.photos || []) : [];
 
 const isFilled = (c, raw) => {
+  // Cas spécial : N/A (non applicable / ne sait pas) compte comme rempli
+  if (raw && typeof raw === 'object' && raw.na === true) return true;
   const v = getVal(raw);
   if (v === undefined || v === null || v === '') return false;
   // Multi-select : rempli si ≥ 1 élément
@@ -491,8 +582,9 @@ const fmtAgo = (ts) => {
    Affiche un point rouge clignotant sur la gare en cours.
    ============================================================ */
 const SERM_LAYOUT = {
-  // Schématique 100x100 — Touraine, 3 gares
-  // Amboise (hub local, Tours-Blois) ◊ Limeray (halte 5 km nord-est) ◊ Port de Piles (sud Touraine)
+  // Schématique 100x100 — Touraine, 3 gares pilotes
+  // Amboise (hub local Tours-Blois) ◊ Limeray (halte ~5 km nord-est)
+  // Port de Piles (sud Touraine, axe Tours-Poitiers, isolé)
   "Amboise":       { x: 58, y: 30, hub: true },
   "Limeray":       { x: 70, y: 25 },
   "Port de Piles": { x: 38, y: 78, hub: true }
@@ -502,7 +594,6 @@ const SERM_LINES = [
   // Amboise ↔ Limeray (axe Tours-Blois) — Port de Piles isolé sur axe Tours-Poitiers
   { stations: ['Limeray', 'Amboise'] }
 ];
-
 
 /* ============================================================
    COMPONENTS — small UI atoms
@@ -551,7 +642,7 @@ function Stamp({ children, color = 'var(--red)' }) {
 /* ============================================================
    HERO ACCUEIL — sobre, sans carte
    ============================================================ */
-function FriendlyHero({ all, auteur, visites, fullyDone, inProgress, visited, totalGares, onPick, onOpen }) {
+function FriendlyHero({ all, auteur, visites, fullyDone, inProgress, visited, totalGares, onPick, onOpen, onExportAll }) {
   const mine = visites.filter(v => v.auteur === auteur);
   const lastMine = mine[0];
   const mineOpen = mine.filter(v => {
@@ -700,6 +791,25 @@ function FriendlyHero({ all, auteur, visites, fullyDone, inProgress, visited, to
           </span>
           <span style={{ fontSize: 18, opacity: 0.9, position:'relative' }}>→</span>
         </button>
+
+        {/* CTA secondaire : Export — visible et accessible */}
+        <button onClick={onExportAll} style={{
+          width:'100%', padding:'12px 18px', marginTop: 10,
+          background:'var(--ink)', color:'var(--paper-light)',
+          fontFamily:'var(--font-display)', fontSize: 14, fontWeight: 600,
+          letterSpacing:'0.03em', borderRadius: 2,
+          display:'flex', alignItems:'center', justifyContent:'space-between', gap: 10,
+          border: '1px solid var(--ink)'
+        }}>
+          <span style={{ display:'flex', alignItems:'center', gap: 10 }}>
+            <span style={{ fontSize: 17 }}>⇣</span>
+            <span>Exporter les données</span>
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 500, letterSpacing:'0.12em',
+            textTransform:'uppercase', opacity: 0.7 }}>
+            {visited} visite{visited > 1 ? 's' : ''} · CSV / Excel / JSON
+          </span>
+        </button>
         <style>{`
           @keyframes sermBlink {
             0%, 100% { opacity: 1; }
@@ -729,8 +839,6 @@ function HomeScreen({ onPick, onOpen, all, auteur, onChangeAuteur, onExportAll, 
   }).length;
   const inProgress = visited - fullyDone;
   const todayStr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const heroStyle = 'editorial';
-  const headerStyle = 'masthead';
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--paper-light)', position: 'relative' }}>
@@ -742,7 +850,6 @@ function HomeScreen({ onPick, onOpen, all, auteur, onChangeAuteur, onExportAll, 
       }} />
 
       {/* MASTHEAD */}
-      {headerStyle === 'masthead' ?
       <div style={{ background: 'var(--ink)', color: 'var(--paper)', position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ padding: '10px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           borderBottom: '1px solid rgba(245,242,235,0.15)' }}>
@@ -763,33 +870,25 @@ function HomeScreen({ onPick, onOpen, all, auteur, onChangeAuteur, onExportAll, 
           {/* DATELINE */}
           <div style={{ padding: '7px 18px', display: 'flex', justifyContent: 'space-between',
           fontSize: 9.5, color: 'rgba(245,242,235,0.6)', letterSpacing: '0.1em',
-          textTransform: 'uppercase', fontWeight: 500 }}>
+          textTransform: 'uppercase', fontWeight: 500, alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <span>{todayStr}</span>
             <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button onClick={onExportAll} style={{
                 color: 'rgba(245,242,235,0.85)', fontSize: 9.5, letterSpacing: '0.1em',
                 textTransform: 'uppercase', fontWeight: 600, padding: 0
-              }}>⇣ Export CSV</button>
+              }}>⇣ Export</button>
               <span>N° {String(visited).padStart(3, '0')} · Vol. I</span>
             </span>
           </div>
           <style>{`@keyframes sermSync { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
-        </div> :
-
-      <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        borderBottom: '1px solid var(--border)', background: 'var(--paper-light)', position: 'sticky', top: 0, zIndex: 10 }}>
-          <div style={{ background: 'var(--red)', color: 'var(--paper-light)', padding: '4px 8px',
-          fontWeight: 700, fontSize: 12, letterSpacing: '0.18em', borderRadius: 1 }}>AREP</div>
-          <button onClick={onChangeAuteur} style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{auteur} ●</button>
         </div>
-      }
 
       <div style={{ padding: '0 0 100px', position: 'relative' }}>
         {/* ── HERO LIGHT : sobre, dynamique, agréable ── */}
         <FriendlyHero
           all={all} auteur={auteur} visites={visites}
           fullyDone={fullyDone} inProgress={inProgress} visited={visited} totalGares={totalGares}
-          onPick={onPick} onOpen={onOpen}
+          onPick={onPick} onOpen={onOpen} onExportAll={onExportAll}
         />
 
         <div style={{ padding: '24px 22px 0' }}>
@@ -875,7 +974,7 @@ function HomeScreen({ onPick, onOpen, all, auteur, onChangeAuteur, onExportAll, 
             <span style={{ letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>Méthodo</span>
             <span style={{ letterSpacing: '0.06em' }}>v3 · 2026</span>
           </div>
-          Adaptée du référentiel SERM HDF · Saisie offline-capable, sync Supabase, export CSV.
+          Adaptée du référentiel SERM HDF. Saisie offline-capable, sync Supabase, export CSV.
         </div>
         </div>
       </div>
@@ -1277,6 +1376,10 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
     [gare, visite.data]
   );
   const [activeId, setActiveId] = useState(sections[0].id);
+  // ID du critère actif (déplié). Les autres critères répondus sont repliés.
+  const [activeCritId, setActiveCritId] = useState(null);
+  // Reset l'actif quand on change d'onglet
+  useEffect(() => { setActiveCritId(null); }, [activeId]);
   // If the active section becomes hidden (e.g. user marked BV as Absent), fall back to first
   useEffect(() => {
     if (!sections.find((s) => s.id === activeId)) {
@@ -1306,11 +1409,21 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
     } else {
       next = val;
     }
+    // Toute vraie valeur retire le flag N/A
+    if (next && typeof next === 'object' && !Array.isArray(next)) delete next.na;
     onUpdate({ ...visite, data: { ...visite.data, [cid]: next }, updated: Date.now() });
   };
   const clearVal = (cid) => {
     const d = { ...visite.data };delete d[cid];
     onUpdate({ ...visite, data: d, updated: Date.now() });
+  };
+  /* Marque le critère comme N/A (Non Applicable / Ne Sait Pas)
+     → compte comme rempli dans la complétion, mais sans valeur */
+  const setNA = (cid) => {
+    const cur = visite.data[cid];
+    const obj = (cur && typeof cur === 'object' && !Array.isArray(cur)) ? cur : {};
+    // On garde note et photos s'il y en a, et on ajoute na: true
+    onUpdate({ ...visite, data: { ...visite.data, [cid]: { ...obj, na: true } }, updated: Date.now() });
   };
   /* Update note (always promotes data[id] to object form) */
   const setNote = (cid, note) => {
@@ -1450,7 +1563,11 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
 
       {/* SECTION PANEL — full focus */}
       <div id="panel-scroll" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-      style={{ flex: 1, overflowY: 'auto', background: activeSection.bureau ? '#F5F7F9' : 'var(--white)', minHeight: 0 }}>
+      style={{ flex: 1, overflowY: 'auto',
+        background: activeSection.bureau ? '#F5F7F9' : 'var(--white)',
+        minHeight: 0,
+        transition: 'background 0.2s, box-shadow 0.2s'
+      }}>
         <div style={{ padding: '18px 18px 100px' }}>
           {activeSection.bureau &&
           <div style={{ background: 'var(--bureau)', color: 'var(--paper-light)', padding: '10px 12px',
@@ -1471,16 +1588,28 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
               tous les types de handicap : moteur, visuel, auditif, intellectuel/psychique.
             </div>
           }
-          {/* SECTION HEADER */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+
+
+          {/* SECTION HEADER — sticky pour rester visible au scroll */}
+          <div style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 4,
+            background: activeSection.bureau ? '#F5F7F9' : 'var(--white)',
+            margin: '0 -18px 18px',
+            padding: '12px 18px 12px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 14
+          }}>
             <div className="tabular" style={{
-              fontSize: 36, fontWeight: 700, lineHeight: 0.9,
+              fontSize: 28, fontWeight: 700, lineHeight: 0.9,
               color: activeSection.bureau ? 'var(--bureau)' : 'var(--red)',
-              fontFamily: 'var(--font-display)', letterSpacing: '-0.04em'
+              fontFamily: 'var(--font-display)', letterSpacing: '-0.04em', flexShrink: 0
             }}>{String(Math.floor(activeSection.n)).padStart(2, '0')}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.1, letterSpacing: '-0.015em' }}>{activeSection.title}</h3>
-              <div style={{ fontSize: 11.5, color: 'var(--taupe)', marginTop: 3 }}>{activeSection.subtitle}</div>
+              <h3 style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.1, letterSpacing: '-0.015em' }}>{activeSection.title}</h3>
+              <div style={{ fontSize: 10.5, color: 'var(--taupe)', marginTop: 1,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeSection.subtitle}</div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div className="tabular" style={{ fontSize: 13, fontWeight: 700,
@@ -1490,7 +1619,7 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
               <div style={{ fontSize: 9.5, color: 'var(--taupe)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>relevés</div>
             </div>
           </div>
-          <div style={{ height: 1.5, background: 'var(--ink)', width: 30, marginBottom: 18 }} />
+          {/* trait séparateur retiré : le header sticky a sa propre borderBottom */}
 
           {/* Bouton next-section compact en haut — pour ne pas avoir à scroller */}
           {activeIdx < sections.length - 1 &&
@@ -1511,15 +1640,21 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
           {/* CRITERIA */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {activeSection.criteria.map((c) =>
-            <Criterion key={c.id} c={c} raw={visite.data[c.id]}
-              gareName={gare.nom}
-              locked={false}
-              onSetVal={(v) => setVal(c.id, v)}
-              onSetNote={(n) => setNote(c.id, n)}
-              onSetPhotos={(p) => setPhotos(c.id, p)}
-              onClear={() => clearVal(c.id)}
-              onToast={onToast} />
+            <div key={c.id} style={null}>
+              <Criterion c={c} raw={visite.data[c.id]}
+                gareName={gare.nom}
+                locked={false}
+                onSetVal={(v) => setVal(c.id, v)}
+                onSetNote={(n) => setNote(c.id, n)}
+                onSetPhotos={(p) => setPhotos(c.id, p)}
+                onClear={() => clearVal(c.id)}
+                onSetNA={() => setNA(c.id)}
+                isActive={activeCritId === c.id}
+                onActivate={() => setActiveCritId(c.id)}
+                onToast={onToast} />
+            </div>
             )}
+
           </div>
 
           {/* FOOTER NAV inside panel */}
@@ -1581,19 +1716,14 @@ function FormScreen({ gare, visite, onUpdate, onBack, onOverview, onDelete, onTo
 /* ============================================================
    CRITERION
    ============================================================ */
-function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear, onToast, locked }) {
+function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear, onSetNA, onToast, locked, isActive, onActivate }) {
   // Sub-head : juste un séparateur visuel dans une section (PMR, Synthèse)
   if (c.type === 'subhead') {
     return (
       <div style={{
         marginTop: 6, marginBottom: -4, paddingTop: 14, paddingBottom: 6,
-        borderTop: '1.5px solid var(--ink)',
-        display: 'flex', alignItems: 'center', gap: 10
+        borderTop: '1.5px solid var(--ink)'
       }}>
-        <span style={{ width: 14, height: 14, borderRadius: '50%',
-          background: 'var(--ink)', color: 'var(--paper-light)',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 9, fontWeight: 700 }}>♿</span>
         <h4 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
           textTransform: 'uppercase', color: 'var(--ink)' }}>{c.label}</h4>
       </div>
@@ -1607,9 +1737,12 @@ function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear
   const note = getNote(raw);
   const photos = getPhotos(raw);
   const filled = isFilled(c, raw);
-  const hasExtras = !!note;
-  const [showExtras, setShowExtras] = useState(hasExtras);
+  const isNA = raw && typeof raw === 'object' && raw.na === true;
+  // Repli auto : si la question est répondue (ou N/A) ET qu'elle n'est pas active, on affiche compact
+  const collapsed = filled && !isActive;
+  // Note libre toujours ouverte (sauf si en mode collapsed)
   const [uploading, setUploading] = useState(false);
+  const [hdMode, setHdMode] = useState(false);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
@@ -1621,10 +1754,14 @@ function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear
     let next = [...photos];
     for (const file of files) {
       try {
-        const photo = await uploadPhoto(gareName, c.id, file);
+        const photo = await uploadPhoto(gareName, c.id, file, { hd: hdMode });
         next = [...next, photo];
         onSetPhotos(next);
-        if (onToast) onToast('Photo ajoutée ✓', 'success');
+        const fmtSize = (b) => b > 1024*1024 ? `${(b/1024/1024).toFixed(1)} MB` : `${Math.round(b/1024)} KB`;
+        const msg = hdMode
+          ? `Photo HD ajoutée · ${fmtSize(photo.size)} ✓`
+          : `Photo ajoutée · ${fmtSize(photo.originalSize)} → ${fmtSize(photo.size)} ✓`;
+        if (onToast) onToast(msg, 'success');
       } catch (err) {
         console.warn('Upload error:', err);
         if (onToast) onToast('⚠ Échec upload', 'error');
@@ -1648,8 +1785,70 @@ function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear
 
   const photoCount = photos.length;
 
+  // Helper : résumer la valeur en une ligne pour le mode compact
+  const summarize = () => {
+    if (isNA) return '⊘ Non applicable';
+    if (Array.isArray(value)) return value.length ? value.join(', ') : '—';
+    if (value && typeof value === 'object') {
+      const parts = [];
+      if (value.presence === 'yes') parts.push('Présent');
+      if (value.presence === 'no') parts.push('Absent');
+      if (value.nb != null && value.nb !== '' && value.nb !== 0) parts.push(`${value.nb}`);
+      if (value.etat != null) {
+        const labelsEtat = ['N/A', 'Mauvais', 'Moyen', 'Bon'];
+        parts.push(labelsEtat[Math.round(value.etat * 3)] || '');
+      }
+      return parts.filter(Boolean).join(' · ') || '—';
+    }
+    if (c.type === 'rating' && c.labels && typeof value === 'number') return c.labels[value] || `Note ${value}`;
+    if (c.type === 'presence') return value === 'Présent' ? 'Présent' : value === 'Absent' ? 'Absent' : String(value);
+    if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+    return value != null ? String(value) : '—';
+  };
+
+  // RENDU COMPACT — pour les questions répondues non actives ou N/A
+  if ((collapsed || isNA) && !locked) {
+    return (
+      <div onClick={onActivate} style={{
+        borderLeft: `3px solid ${isNA ? 'var(--taupe-light)' : 'var(--green-soft)'}`,
+        paddingLeft: 12, paddingTop: 7, paddingBottom: 7,
+        cursor: 'pointer', position: 'relative',
+        background: isNA ? 'var(--paper-deep)' : 'transparent',
+        opacity: isNA ? 0.75 : 1,
+        transition: 'background 0.15s'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.25,
+              color: isNA ? 'var(--taupe)' : 'var(--ink)',
+              textDecoration: isNA ? 'line-through' : 'none' }}>{c.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2,
+              display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600 }}>{summarize()}</span>
+              {note && <span style={{ fontSize: 10.5, color: 'var(--taupe)',
+                background: 'var(--paper-deep)', padding: '1px 6px', borderRadius: 99 }}>
+                📝 {note.length > 20 ? note.slice(0,20)+'…' : note}
+              </span>}
+              {photoCount > 0 && <span style={{ fontSize: 10.5, color: 'var(--taupe)',
+                background: 'var(--paper-deep)', padding: '1px 6px', borderRadius: 99 }}>
+                📷 {photoCount}
+              </span>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+            {isNA && <button onClick={(e) => { e.stopPropagation(); onClear(); }} title="Retirer N/A" style={{
+              fontSize: 10, color: 'var(--taupe)', padding: '3px 8px',
+              border: '1px solid var(--border)', borderRadius: 2
+            }}>↺</button>}
+            <span style={{ fontSize: 11, color: 'var(--taupe)', padding: '2px 4px' }}>✎</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
+    <div onClick={onActivate} style={{
       borderLeft: `3px solid ${filled ? 'var(--green-soft)' : 'var(--border)'}`,
       paddingLeft: 12, paddingTop: 6, paddingBottom: 6,
       transition: 'border-color 0.2s',
@@ -1722,6 +1921,17 @@ function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear
             <path d="M2 9 L5 6 L8 8 L11 5 L12 6.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
           </svg>
         </button>
+        <button onClick={() => setHdMode(m => !m)} disabled={uploading}
+          title={hdMode ? "Photos en qualité originale (HD)" : "Photos compressées (~5x plus légères)"}
+          style={{
+            padding: '4px 8px', minWidth: 40,
+            border: `1.5px solid ${hdMode ? 'var(--red)' : 'var(--border)'}`,
+            borderRadius: 4,
+            background: hdMode ? 'var(--red)' : 'var(--paper-light)',
+            color: hdMode ? 'white' : 'var(--taupe)',
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>HD</button>
       </div>
       }
 
@@ -1765,26 +1975,30 @@ function Criterion({ c, raw, gareName, onSetVal, onSetNote, onSetPhotos, onClear
         <CompositePNE value={compVal} onSet={setComp} />
       }
 
-      {/* NOTE — repliable */}
-      <button onClick={() => setShowExtras((s) => !s)} style={{
-        marginTop: 8, fontSize: 11, color: hasExtras ? 'var(--ink)' : 'var(--taupe)',
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 0',
-        fontWeight: hasExtras ? 600 : 400
-      }}>
-        {showExtras ? '−' : '+'} note libre
-        {note && <span style={{ fontSize: 10, color: 'var(--taupe)' }}>· {note.length>30 ? note.slice(0,30)+'…' : note}</span>}
-      </button>
-      {showExtras && !locked &&
-      <div style={{ marginTop: 6 }}>
-        <textarea placeholder="Précision, contexte ou observation libre…" rows={2}
+      {/* NOTE — toujours ouverte (sauf si locked / N/A actif) */}
+      {!locked && !isNA &&
+      <div style={{ marginTop: c.type === 'text' ? 0 : 8 }}>
+        <textarea placeholder={c.type === 'text' ? "Saisir le texte…" : "Note libre (précision, contexte, observation…)"}
+          rows={c.type === 'text' ? 3 : 2}
           value={note}
           onChange={(e) => onSetNote(e.target.value)}
+          onFocus={onActivate}
           style={{
             width: '100%', padding: '8px 10px', fontSize: 12.5, fontFamily: 'inherit',
             border: '1px solid var(--border)', borderRadius: 2, background: 'var(--paper-light)',
-            resize: 'vertical', outline: 'none', minHeight: 48, lineHeight: 1.4
+            resize: 'vertical', outline: 'none', minHeight: c.type === 'text' ? 72 : 40, lineHeight: 1.4
           }} />
       </div>
+      }
+
+      {/* BOUTON N/A — toujours dispo, séparé en bas */}
+      {!locked && onSetNA && !isNA &&
+      <button onClick={onSetNA} style={{
+        marginTop: 10, fontSize: 10.5, color: 'var(--taupe)',
+        padding: '4px 10px', border: '1px dashed var(--border)', borderRadius: 99,
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        fontWeight: 500
+      }}>⊘ Non applicable / Ne sait pas</button>
       }
     </div>);
 
@@ -2212,7 +2426,7 @@ function OverviewScreen({ gare, visite, onBack, onZone, onExport }) {
 /* ============================================================
    EXPORT SCREEN — choix scope (toutes / cette gare / sélection) × format (CSV / Excel / JSON)
    ============================================================ */
-function ExportScreen({ all, onBack, onExport }) {
+function ExportScreen({ all, onBack, onExport, onExportPhotos, syncing }) {
   const visitesAll = Object.values(all).sort((a, b) => b.updated - a.updated);
   const [scope, setScope] = useState('all'); // 'all' | 'select' | 'completed' | 'in_progress'
   const [format, setFormat] = useState('xlsx'); // 'xlsx' | 'csv' | 'json'
@@ -2375,8 +2589,8 @@ function ExportScreen({ all, onBack, onExport }) {
           padding: '10px 12px', fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 22,
           lineHeight: 1.5
         }}>
-          ℹ Les photos sont incluses sous forme de liens (URL Supabase) dans la colonne dédiée.
-          Pour intégrer les images directement dans Excel, télécharge l'export, puis utilise <strong>Insertion → Image depuis URL</strong>.
+          ℹ Dans le tableau exporté, les photos sont sous forme de liens (URL Supabase) dans une colonne dédiée.
+          Pour récupérer toutes les images organisées par gare / section / question, utilise le <strong>ZIP photothèque</strong> ci-dessous.
         </div>
 
         <button onClick={handleExport} disabled={visitesToExport.length === 0} style={{
@@ -2387,10 +2601,71 @@ function ExportScreen({ all, onBack, onExport }) {
         }}>
           ⇣ Exporter {visitesToExport.length} visite{visitesToExport.length > 1 ? 's' : ''}
         </button>
+
+        {/* ========================================================
+            PHOTOTHEQUE ZIP — séparé, après le tableau
+            ======================================================== */}
+        {(() => {
+          // Compter les photos sur le scope sélectionné
+          let nPhotos = 0;
+          visitesToExport.forEach(v => {
+            if (!v.data) return;
+            SECTIONS.forEach(s => (s.criteria || []).forEach(c => {
+              const d = v.data[c.id];
+              if (d && typeof d === 'object' && !Array.isArray(d) && Array.isArray(d.photos)) {
+                nPhotos += d.photos.length;
+              }
+            }));
+          });
+          return (
+            <div style={{ marginTop: 32, paddingTop: 22, borderTop: '1px dashed var(--border)' }}>
+              <div className="kicker" style={{ color: 'var(--taupe)', fontSize: 10, marginBottom: 10 }}>
+                Photothèque
+              </div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, letterSpacing: '-0.015em' }}>
+                ZIP organisé par gare / section / question
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: 12 }}>
+                Toutes les photos rangées en arborescence claire :<br />
+                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--paper-deep)',
+                  padding: '1px 5px', borderRadius: 2 }}>
+                  Lille-Flandres / Quais / Éclairage_01.jpg
+                </code>
+              </p>
+              <button onClick={() => onExportPhotos(visitesToExport)}
+                disabled={nPhotos === 0 || syncing}
+                style={{
+                  width: '100%', padding: '14px', background: 'var(--ink)', color: 'var(--paper-light)',
+                  fontWeight: 600, fontSize: 13.5, letterSpacing: '0.03em',
+                  borderRadius: 2, opacity: (nPhotos === 0 || syncing) ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8
+                }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>📦</span>
+                  <span>{syncing ? 'Préparation…' : 'Télécharger la photothèque'}</span>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.75 }}>
+                  {nPhotos === 0 ? 'aucune photo' : `${nPhotos} photo${nPhotos > 1 ? 's' : ''}`}
+                </span>
+              </button>
+              <p style={{ fontSize: 10.5, color: 'var(--taupe)', marginTop: 8, lineHeight: 1.4 }}>
+                Téléchargement direct depuis Supabase. Selon le nombre de photos et la connexion,
+                la génération peut prendre quelques secondes à plusieurs minutes.
+              </p>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
 }
+
+
+const inputStyle = {
+  width: '100%', padding: '10px 12px', border: '1px solid var(--border)',
+  background: 'var(--white)', fontSize: 14, borderRadius: 4
+};
+const hintStyle = { fontSize: 11, color: 'var(--taupe)', marginTop: 4 };
 
 /* ============================================================
    APP
@@ -2402,12 +2677,14 @@ function App() {
   const [toast, setToast] = useState(null);
   const [syncing, setSyncing] = useState(false);
 
+
   // Initial pull from Supabase + local persistence
   useEffect(() => {
     let mounted = true;
     setSyncing(true);
     pullAllFromSupa().then((fresh) => {
-      if (mounted && fresh) setAll(fresh);
+      if (!mounted) return;
+      if (fresh) setAll(fresh);
       setSyncing(false);
     });
     return () => { mounted = false; };
@@ -2415,8 +2692,27 @@ function App() {
 
   // Real-time sync : refresh when teammates push changes
   useEffect(() => {
-    const teardown = setupRealtimeSync((fresh) => setAll(fresh));
-    return teardown;
+    const teardownVis = setupRealtimeSync((fresh) => {
+      setAll((prev) => {
+        // Merge intelligent : pour les gares qu'on est en train d'éditer
+        // (push pending) ou qu'on vient de pousher (recently), on garde
+        // notre version locale pour éviter d'écraser ce que l'utilisateur
+        // est en train de taper.
+        const merged = { ...fresh };
+        Object.keys(pendingPushes.current).forEach(gn => {
+          if (prev[gn]) merged[gn] = prev[gn];
+        });
+        Object.keys(recentlyPushed.current).forEach(gn => {
+          // Si notre version locale est plus récente que ce qui revient
+          // du serveur, on garde la nôtre
+          if (prev[gn] && (!fresh[gn] || prev[gn].updated >= fresh[gn].updated)) {
+            merged[gn] = prev[gn];
+          }
+        });
+        return merged;
+      });
+    });
+    return () => { teardownVis(); };
   }, []);
 
   // Persist locally
@@ -2445,7 +2741,7 @@ function App() {
       // Pré-remplir avec les attributs connus de la gare (Caractérisation + Synthèse)
       const initialData = {
         carac_quais_nb_acc: g.quais,
-        // (typologie Touraine à choisir manuellement — pas de mapping auto cat_pro → choices)
+        // (typologie Touraine à choisir manuellement)
       };
       const newV = { gare: gareName, data: initialData, updated: Date.now(), auteur };
       setAll((a) => ({ ...a, [gareName]: newV }));
@@ -2454,11 +2750,34 @@ function App() {
     setRoute({ name: 'form', gareName });
   };
 
+  /* ============================================================
+     RACE CONDITION FIX — debounce des pushes + filtrage des échos
+     ============================================================
+     Problème résolu : taper "Quai non présent" pendant que Supabase
+     renvoie l'écho de notre propre push écrase ce qu'on est en train
+     de taper. La solution : (1) debounce le push de 800ms, (2) garder
+     une trace de nos pushes en cours pour les ignorer au retour realtime.
+     ============================================================ */
+  const pendingPushes = useRef({});  // gareName -> timeoutId (push en attente)
+  const recentlyPushed = useRef({}); // gareName -> ts (push récent à ignorer au retour)
+
+  const debouncedPush = useCallback((visite) => {
+    const gn = visite.gare;
+    if (pendingPushes.current[gn]) clearTimeout(pendingPushes.current[gn]);
+    pendingPushes.current[gn] = setTimeout(async () => {
+      delete pendingPushes.current[gn];
+      recentlyPushed.current[gn] = Date.now();
+      try { await pushVisiteToSupa(visite); } catch (e) { console.warn('Push failed:', e); }
+      // Garde la trace 4 secondes pour ignorer le retour realtime de notre propre push
+      setTimeout(() => { delete recentlyPushed.current[gn]; }, 4000);
+    }, 800);
+  }, []);
+
   const updateVisite = (v) => {
     // Le dernier modificateur devient l'auteur affiché
     const updated = { ...v, auteur: auteur };
     setAll((a) => ({ ...a, [v.gare]: updated }));
-    pushVisiteToSupa(updated);
+    debouncedPush(updated);
   };
 
   const deleteVisite = async (gareName) => {
@@ -2590,6 +2909,84 @@ function App() {
     showToast(`${visites.length} visite${visites.length > 1 ? 's' : ''} exportée${visites.length > 1 ? 's' : ''} ✓`, 'success');
   };
 
+  /* ===== EXPORT PHOTOS — ZIP rangé par Gare / Section / Question ===== */
+  const exportPhotosZip = async (visites) => {
+    if (!window.JSZip) { showToast('Bibliothèque ZIP non chargée — recharge la page', 'error'); return; }
+    // Sanitize : retire caractères interdits dans les noms de fichiers
+    const sanit = (s) => String(s).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    // Compter total
+    let totalPhotos = 0;
+    visites.forEach(v => {
+      if (!v.data) return;
+      SECTIONS.forEach(s => (s.criteria || []).forEach(c => {
+        totalPhotos += getPhotos(v.data[c.id]).length;
+      }));
+    });
+    if (totalPhotos === 0) { showToast('Aucune photo à exporter', 'error'); return; }
+
+    setSyncing(true);
+    showToast(`Préparation de ${totalPhotos} photo${totalPhotos > 1 ? 's' : ''}…`);
+    const zip = new window.JSZip();
+    let fetched = 0, errors = 0;
+    const manifest = [`PHOTOTHEQUE SERM HAUTS-DE-FRANCE`,
+      `Export du ${new Date().toLocaleString('fr-FR')}`,
+      `Auteur : ${auteur}`,
+      '',
+      'STRUCTURE : Gare / Section / Question_NN.jpg',
+      '(_HD signale une photo en qualité originale)',
+      '',
+      '--- DETAIL ---'];
+
+    for (const v of visites) {
+      if (!v.data) continue;
+      const gareSafe = sanit(v.gare);
+      for (const s of SECTIONS) {
+        const secSafe = sanit(s.title);
+        for (const c of (s.criteria || [])) {
+          const photos = getPhotos(v.data[c.id]);
+          if (photos.length === 0) continue;
+          const critSafe = sanit(c.label);
+          for (let i = 0; i < photos.length; i++) {
+            const p = photos[i];
+            if (!p.url) continue;
+            const num = String(i + 1).padStart(2, '0');
+            const hdTag = p.hd ? '_HD' : '';
+            // Extension : déduite de p.url ou .jpg par défaut
+            const ext = (p.url.match(/\.(jpe?g|png|webp|heic)(?:\?|$)/i)?.[1] || 'jpg').toLowerCase();
+            const path = `${gareSafe}/${secSafe}/${critSafe}_${num}${hdTag}.${ext}`;
+            try {
+              const resp = await fetch(p.url);
+              if (!resp.ok) throw new Error('HTTP ' + resp.status);
+              const blob = await resp.blob();
+              zip.file(path, blob);
+              manifest.push(`✓ ${path}`);
+              fetched++;
+            } catch (e) {
+              console.warn('Photo fetch failed:', p.url, e);
+              manifest.push(`✗ ${path}  [ÉCHEC]`);
+              errors++;
+            }
+          }
+        }
+      }
+    }
+
+    if (fetched === 0) {
+      showToast('Échec téléchargement des photos', 'error');
+      setSyncing(false);
+      return;
+    }
+
+    manifest.push('', `--- RECAP ---`, `${fetched} photo(s) téléchargée(s)`, errors > 0 ? `${errors} échec(s)` : '');
+    zip.file('_README.txt', manifest.join('\n'));
+
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const today = new Date().toISOString().slice(0, 10);
+    downloadBlob(blob, `photos_SERM_HDF_${today}.zip`);
+    showToast(`Photothèque ZIP : ${fetched} photo${fetched > 1 ? 's' : ''}${errors > 0 ? ` (${errors} échec)` : ''} ✓`, 'success');
+    setSyncing(false);
+  };
+
   if (route.name === 'home') {
     return <>
       <HomeScreen all={all} auteur={auteur} syncing={syncing}
@@ -2607,7 +3004,9 @@ function App() {
     return <>
       <ExportScreen all={all}
         onBack={() => setRoute({ name: 'home' })}
-        onExport={(visites, format, name) => exportData(visites, format, name)} />
+        onExport={(visites, format, name) => exportData(visites, format, name)}
+        onExportPhotos={exportPhotosZip}
+        syncing={syncing} />
       <Toast toast={toast} />
     </>;
   }
